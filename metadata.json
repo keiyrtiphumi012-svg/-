@@ -1,0 +1,6 @@
+{
+  "name": "Matrix Global Registry",
+  "description": "An immutable repository of cryptographic assets and digital nodes within the Matrix infrastructure. Features real-time scanning, asset tracking, and secured protocol verification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
