@@ -21,11 +21,13 @@ import {
   RefreshCw,
   Archive,
   AlertCircle,
+  Info,
   TrendingUp,
   ShoppingCart,
   ArrowUpRight,
   ArrowDownRight,
   Zap,
+  Landmark,
   BarChart as BarChartIcon
 } from 'lucide-react';
 import { 
@@ -50,17 +52,27 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAsset, setSelectedAsset] = useState<CryptoAsset | null>(null);
   const [time, setTime] = useState(new Date().toLocaleTimeString());
-  const [currentView, setCurrentView] = useState<'LOG' | 'MANAGER' | 'PULSE' | 'SECURITY' | 'MARKET' | 'TREASURY'>('LOG');
+  const [currentView, setCurrentView] = useState<'LOG' | 'MANAGER' | 'PULSE' | 'SECURITY' | 'MARKET' | 'TREASURY' | 'BANK'>('LOG');
   const [assets, setAssets] = useState<CryptoAsset[]>(INITIAL_ASSETS);
   const [isRegistered, setIsRegistered] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [isMonetized, setIsMonetized] = useState(false);
+  const [isMonetized, setIsMonetized] = useState(true);
   const [reinvestmentRate, setReinvestmentRate] = useState(25); // 25% reinvestment by default
   const [commissionRate, setCommissionRate] = useState(50); // 50% commission as requested
   const [isDomainRegistered, setIsDomainRegistered] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [treasuryShares, setTreasuryShares] = useState(0);
   const [isExitTriggered, setIsExitTriggered] = useState(false);
+  const [withdrawnAmount, setWithdrawnAmount] = useState(0);
+  const [liveYield, setLiveYield] = useState(0);
+  const [walletBalance, setWalletBalance] = useState(5.00);
+  const [bankBalance, setBankBalance] = useState(0);
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [showWithdrawSuccess, setShowWithdrawSuccess] = useState(false);
+  const [showBankTransferSuccess, setShowBankTransferSuccess] = useState(false);
+  const [isTransferringToBank, setIsTransferringToBank] = useState(false);
+  const [selectedBank, setSelectedBank] = useState('SCB');
+  const [shouldShake, setShouldShake] = useState(false);
   
   const stakeholders = useMemo(() => [
     { id: 'mof', name: 'Ministry of Finance (TH)', shares: 42.0, role: 'REGULATORY', status: 'VERIFIED' },
@@ -109,10 +121,6 @@ export default function App() {
   }, [searchQuery, assets]);
 
   const totalValuation = useMemo(() => assets.reduce((sum, a) => sum + a.valuation, 0), [assets]);
-  const MTX_TO_THB = 175.50; // Current Matrix Exchange Rate in THB
-  const adRevenue = isMonetized ? totalValuation * 0.00042 : 0;
-  const domainCost = 50.00;
-  const totalPages = Math.ceil(filteredAssets.length / itemsPerPage);
   
   const trendData = useMemo(() => {
     const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -126,6 +134,39 @@ export default function App() {
       };
     });
   }, [totalValuation]);
+
+  const lifetimeRevenue = useMemo(() => trendData.reduce((sum, d) => sum + d.revenue, 0), [trendData]);
+  const MTX_TO_THB = 175.50; // Current Matrix Exchange Rate in THB
+  const adRevenue = isMonetized ? totalValuation * 0.00042 : 0;
+  
+  // User Earnings based on Lifetime Revenue
+  const userLifetimeCommission = lifetimeRevenue * (commissionRate / 100);
+  const userLifetimeEquityYield = lifetimeRevenue * 0.04;
+  const initialLifetimeEarnings = userLifetimeCommission + userLifetimeEquityYield;
+  
+  const totalUserEarnings = initialLifetimeEarnings + liveYield; // Lifetime total + live
+  
+  // Monthly projected/current
+  const userCommission = adRevenue * (commissionRate / 100);
+  const userEquityYield = adRevenue * 0.04;
+  const monthlyUserEarnings = userCommission + userEquityYield;
+
+  const availableBalance = totalUserEarnings - withdrawnAmount;
+  const domainCost = 50.00;
+  const totalPages = Math.ceil(filteredAssets.length / itemsPerPage);
+
+  // Live yield accumulation
+  useEffect(() => {
+    if (isMonetized) {
+      const interval = setInterval(() => {
+        // Accumulate a small amount every 100ms based on the ad revenue
+        // (adRevenue is per cycle, let's assume cycle is ~30 days, so 30*24*3600*10 ticks)
+        const tickValue = (adRevenue / (30 * 24 * 3600 * 10)); 
+        setLiveYield(prev => prev + Math.max(0.00001, tickValue));
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [isMonetized, adRevenue]);
 
   const assetDistributionData = useMemo(() => {
     const types = ['CORE', 'NODAL', 'REDUNDANT', 'OVERFLOW'];
@@ -147,6 +188,46 @@ export default function App() {
       setIsExitTriggered(true);
       // Simulate treasury absorbing the shares
       setTreasuryShares(prev => prev + 10.5);
+    }
+  };
+
+  const handleWithdraw = () => {
+    if (availableBalance > 0.01) {
+      setIsExporting(true);
+      const amountToWithdraw = availableBalance;
+      setTimeout(() => {
+        setWithdrawnAmount(prev => prev + amountToWithdraw);
+        setWalletBalance(prev => prev + amountToWithdraw);
+        setIsExporting(false);
+        setShowWithdrawSuccess(true);
+        setTimeout(() => setShowWithdrawSuccess(false), 3000);
+      }, 1500);
+    }
+  };
+  
+  const handleBankTransfer = () => {
+    const totalToTransfer = walletBalance + availableBalance;
+    
+    if (totalToTransfer >= 0.001 && bankAccountNumber.length >= 10 && !isTransferringToBank) {
+      setIsTransferringToBank(true);
+      
+      setTimeout(() => {
+        const fromAvailable = availableBalance;
+        const totalToBank = walletBalance + availableBalance;
+        
+        setWalletBalance(0);
+        setWithdrawnAmount(prev => prev + fromAvailable);
+        setBankBalance(prev => prev + (totalToBank * MTX_TO_THB));
+        setIsTransferringToBank(false);
+        setShowBankTransferSuccess(true);
+        setTimeout(() => setShowBankTransferSuccess(false), 4000);
+      }, 2500);
+    } else if (!isTransferringToBank) {
+      setShouldShake(true);
+      if (window.navigator.vibrate) {
+        window.navigator.vibrate([100, 50, 100]);
+      }
+      setTimeout(() => setShouldShake(false), 500);
     }
   };
 
@@ -302,13 +383,59 @@ export default function App() {
             <span>Latency: 14ms</span>
             <span>Uptime: 99.999%</span>
           </div>
-          <div className="flex flex-col items-end border-l border-emerald-500/20 pl-6 h-full justify-center">
-            <span className="text-lg font-bold text-emerald-300 drop-shadow-[0_0_8px_rgba(110,231,183,0.5)]">{time}</span>
-            <span className="text-[9px] opacity-40 uppercase">System Date: {new Date().toLocaleDateString()}</span>
+            <div className="flex flex-col items-end border-l border-emerald-500/20 pl-6 h-full justify-center">
+            <div className="flex items-center gap-3">
+               <button 
+                onClick={() => setCurrentView('BANK')}
+                className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-black transition-all rounded flex items-center gap-2"
+               >
+                 <Landmark className="w-3 h-3" />
+                 Cash Out (THB)
+               </button>
+               <div className="flex flex-col items-end">
+                 <div className="flex items-baseline gap-2">
+                    <span className="text-lg font-bold text-emerald-300 drop-shadow-[0_0_8px_rgba(110,231,183,0.5)]">{time}</span>
+                 </div>
+                 <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black text-emerald-400">{(bankBalance).toLocaleString(undefined, { maximumFractionDigits: 0 })} THB</span>
+                 </div>
+               </div>
+            </div>
           </div>
         </div>
       </header>
       <MarketTicker assets={assets} />
+
+      <AnimatePresence>
+        {showWithdrawSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: '-50%' }}
+            animate={{ opacity: 1, y: 10, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, x: '-50%' }}
+            className="fixed top-20 left-1/2 z-50 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-[0_0_30px_rgba(37,99,235,0.5)] border border-blue-400 flex items-center gap-3"
+          >
+            <ShieldCheck className="w-5 h-5" />
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest leading-none">Withdrawal Successful</p>
+              <p className="text-[9px] font-bold opacity-80 uppercase mt-1">Funds transferred to Secured Matrix Wallet</p>
+            </div>
+          </motion.div>
+        )}
+        {showBankTransferSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: '-50%' }}
+            animate={{ opacity: 1, y: 10, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, x: '-50%' }}
+            className="fixed top-20 left-1/2 z-50 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-[0_0_30px_rgba(16,185,129,0.5)] border border-emerald-400 flex items-center gap-3"
+          >
+            <Landmark className="w-5 h-5" />
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest leading-none">Bank Settlement Verified</p>
+              <p className="text-[9px] font-bold opacity-80 uppercase mt-1">Funds settled at {selectedBank} in THB</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar Controls */}
@@ -321,6 +448,7 @@ export default function App() {
                 { id: 'MANAGER' as const, icon: Cpu, label: 'Node Manager' },
                 { id: 'MARKET' as const, icon: ShoppingCart, label: 'Marketplace' },
                 { id: 'TREASURY' as const, icon: ShieldCheck, label: 'Treasury' },
+                { id: 'BANK' as const, icon: Landmark, label: 'Matrix Bank' },
                 { id: 'PULSE' as const, icon: Activity, label: 'Network Pulse' },
                 { id: 'SECURITY' as const, icon: Lock, label: 'Security Core' },
               ].map((item) => (
@@ -685,13 +813,26 @@ export default function App() {
                </div>
 
                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-8">
                       <div className="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
                         <p className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-2">Resource Efficiency</p>
                         <p className="text-2xl font-black text-emerald-300">94.2%</p>
                         <div className="mt-2 h-1 bg-emerald-950 rounded-full overflow-hidden">
                            <div className="h-full bg-emerald-500 w-[94.2%]" />
                         </div>
+                      </div>
+                      <div className="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                           <Database className="w-8 h-8 text-emerald-400" />
+                        </div>
+                        <p className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-2">Lifetime Revenue</p>
+                        <div className="flex items-baseline gap-2">
+                           <p className="text-2xl font-black text-emerald-300">
+                             {(lifetimeRevenue / 1000).toFixed(1)}k
+                           </p>
+                           <span className="text-[10px] font-bold text-emerald-500/40 uppercase">MTX</span>
+                        </div>
+                        <p className="text-[8px] font-bold text-emerald-500/30 uppercase mt-2 italic">* Since Genesis Node Operation</p>
                       </div>
                       <div className="p-6 bg-cyan-500/5 border border-cyan-500/10 rounded-xl relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-40 transition-opacity">
@@ -712,10 +853,183 @@ export default function App() {
                               </span>
                            </div>
                            <div className="flex flex-col items-end">
-                              <span className="text-[8px] font-black uppercase text-cyan-500/40 italic text-right">Director Commission (Fee)</span>
+                              <span className="text-[8px] font-black uppercase text-cyan-500/40 italic text-right">Commission Rate</span>
                               <span className="text-xs font-black text-blue-400 text-right">
-                                 {(adRevenue * (commissionRate / 100)).toLocaleString(undefined, { maximumFractionDigits: 2 })} MTX
+                                 {commissionRate}%
                               </span>
+                           </div>
+                        </div>
+                      </div>
+                      <div className="p-6 bg-blue-500/10 border border-blue-500/20 rounded-xl relative overflow-hidden group shadow-[0_0_20px_rgba(59,130,246,0.1)]">
+                        <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-40 transition-opacity">
+                           <User className="w-8 h-8 text-blue-400" />
+                        </div>
+                        <p className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-2">Your Personal Yield (You)</p>
+                        <div className="flex items-baseline gap-2">
+                           <p className="text-2xl font-black text-blue-300">
+                             {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                           </p>
+                           <span className="text-[10px] font-bold text-blue-500/40 uppercase">Available Balance</span>
+                        </div>
+                        
+                        <div className="mt-4 flex items-center justify-between">
+                           <div className="flex flex-col">
+                              <span className="text-[8px] font-black uppercase text-blue-500/40 italic tracking-tight">Accrued Lifetime Earnings</span>
+                              <span className="text-xs font-black text-blue-500/60">
+                                 {totalUserEarnings.toLocaleString(undefined, { maximumFractionDigits: 2 })} MTX
+                              </span>
+                           </div>
+                           <div className="flex flex-col items-end">
+                              <span className="text-[8px] font-black uppercase text-blue-500/40 italic tracking-tight">Total Withdrawn</span>
+                              <span className="text-xs font-black text-cyan-400">
+                                 {walletBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })} MTX
+                              </span>
+                           </div>
+                        </div>
+
+                         <div className="mt-4 flex items-center gap-2">
+                            <button 
+                               onClick={handleWithdraw}
+                               disabled={availableBalance <= 0.01 || isExporting}
+                               className={`flex-1 py-3 px-4 rounded-lg font-black text-[10px] tracking-[0.1em] uppercase transition-all flex items-center justify-center gap-2 ${
+                                  availableBalance > 0.01 && !isExporting
+                                  ? 'bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:scale-105 active:scale-95' 
+                                  : 'bg-white/5 text-white/20 cursor-not-allowed grayscale'
+                               }`}
+                            >
+                               {isExporting ? 'ENCRYPTING...' : 'To Wallet'}
+                            </button>
+                            <button 
+                               onClick={() => setCurrentView('BANK')}
+                               className="flex-1 py-3 px-4 rounded-lg font-black text-[10px] tracking-[0.1em] uppercase transition-all flex items-center justify-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-black shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                            >
+                               Settlement (THB)
+                            </button>
+                         </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-blue-500/10 pt-4">
+                           <div className="flex flex-col">
+                              <span className="text-[8px] font-black uppercase text-blue-500/40 italic tracking-tight">Director Fee ({commissionRate}%)</span>
+                              <span className="text-xs font-black text-blue-400">
+                                 {userCommission.toLocaleString(undefined, { maximumFractionDigits: 2 })} MTX
+                              </span>
+                           </div>
+                           <div className="flex flex-col items-end">
+                              <span className="text-[8px] font-black uppercase text-blue-500/40 italic text-right tracking-tight">Equity Yield (4%)</span>
+                              <span className="text-xs font-black text-blue-400 text-right">
+                                 {userEquityYield.toLocaleString(undefined, { maximumFractionDigits: 2 })} MTX
+                              </span>
+                           </div>
+                        </div>
+                        <div className="mt-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded text-[8px] uppercase leading-relaxed text-blue-400/60 font-bold italic">
+                           * จัดสรรรายได้: ค่าธรรมเนียมบริหารจัดการ {commissionRate}% + ปันผลจากหุ้นส่วน {stakeholders.find(s => s.id === 'user')?.shares}% ของรายได้รวมทั้งหมด
+                        </div>
+                      </div>
+
+                      {/* Banking Gateway Integration */}
+                      <div className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-xl relative overflow-hidden group shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                        <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-40 transition-opacity">
+                           <Landmark className="w-8 h-8 text-emerald-400" />
+                        </div>
+                        <p className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-2">Banking Gateway (TH)</p>
+                        <div className="flex items-baseline gap-2 mb-4">
+                           <p className="text-2xl font-black text-emerald-300">
+                             {bankBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                           </p>
+                           <span className="text-[10px] font-bold text-emerald-500/40 uppercase">THB Settlement</span>
+                        </div>
+
+                        <div className="space-y-4">
+                           {/* Balance Stats */}
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="flex flex-col gap-1 border-l border-blue-500/30 pl-3">
+                                 <span className="text-[8px] font-black uppercase text-blue-500/40">In Wallet</span>
+                                 <p className="text-sm font-black text-blue-400">{walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} MTX</p>
+                              </div>
+                              <div className="flex flex-col gap-1 border-l border-cyan-500/30 pl-3">
+                                 <span className="text-[8px] font-black uppercase text-cyan-500/40">Pending</span>
+                                 <p className="text-sm font-black text-cyan-400">{availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} MTX</p>
+                              </div>
+                           </div>
+
+                           {/* Bank Account Input */}
+                           <div className="space-y-2">
+                             <label className="text-[9px] font-black uppercase text-emerald-500/60 block">Bank Account Number (เลขบัญชี)</label>
+                             <input 
+                               type="text"
+                               inputMode="numeric"
+                               value={bankAccountNumber}
+                               onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))}
+                               placeholder="กรอกเลขบัญชี 10 หลัก"
+                               className="w-full bg-black/60 border border-emerald-500/30 rounded-lg py-3 px-4 text-sm font-mono text-emerald-300 focus:outline-none focus:border-emerald-500 shadow-inner placeholder:text-emerald-500/10"
+                               maxLength={15}
+                             />
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-2">
+                              {['SCB', 'KBANK', 'BBL', 'KRUNGTHAI'].map(bank => (
+                                 <button
+                                    key={bank}
+                                    onClick={() => setSelectedBank(bank)}
+                                    className={`py-2 px-3 rounded border text-[9px] font-black tracking-widest transition-all ${
+                                       selectedBank === bank 
+                                       ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' 
+                                       : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                                    }`}
+                                 >
+                                    {bank}
+                                 </button>
+                              ))}
+                           </div>
+                        </div>
+
+                        <div className="mt-4 space-y-3">
+                           <motion.button 
+                              whileHover={{ scale: 1.01 }}
+                              whileTap={{ scale: 0.98 }}
+                              animate={shouldShake ? { x: [-10, 10, -10, 10, 0] } : {}}
+                              transition={{ duration: 0.4 }}
+                              onClick={handleBankTransfer}
+                              disabled={isTransferringToBank}
+                              className={`w-full py-5 px-6 rounded-xl font-black text-[12px] tracking-[0.2em] uppercase transition-all flex flex-col items-center justify-center gap-1 ${
+                                 (walletBalance + availableBalance >= 0.001) && bankAccountNumber.length >= 10 && !isTransferringToBank
+                                 ? 'bg-emerald-500 text-black shadow-[0_0_30px_rgba(16,185,129,0.4)]' 
+                                 : 'bg-white/5 text-white/20 border border-white/10'
+                              }`}
+                           >
+                              {isTransferringToBank ? (
+                                 <>
+                                    <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin mb-1" />
+                                    <span className="animate-pulse">SETTLING WITH BANK...</span>
+                                 </>
+                              ) : (
+                                 <>
+                                    <span>
+                                       {bankAccountNumber.length < 10 
+                                          ? 'กรอกเลขบัญชี 10 หลัก' 
+                                          : (walletBalance + availableBalance < 0.001)
+                                             ? 'MTX ไม่เพียงพอ (ขั้นต่ำ 0.001)'
+                                             : `ยืนยันแลกเงินเข้า ${selectedBank}`}
+                                    </span>
+                                    <span className="text-[8px] font-bold opacity-60 italic normal-case">
+                                       Exchange Rate: 1 MTX = {MTX_TO_THB} บาท
+                                    </span>
+                                 </>
+                              )}
+                           </motion.button>
+
+                           <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-md">
+                              <p className="text-[9px] text-emerald-500/60 leading-tight text-center font-bold">
+                                 * ระบบจะดึงจาก Wallet ก่อน หากไม่มีจะดึงจากเงินรอถอน (Pending) อัตโนมัติ
+                              </p>
+                           </div>
+
+                           <div className="flex justify-between items-center px-1">
+                              <span className="text-[8px] font-black text-emerald-500/40 uppercase">Integration Status</span>
+                              <div className="flex items-center gap-1">
+                                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                 <span className="text-[8px] font-black text-emerald-400 uppercase">API Connected</span>
+                              </div>
                            </div>
                         </div>
                       </div>
@@ -982,7 +1296,16 @@ export default function App() {
                                  <span className={`text-sm font-black font-mono ${
                                    person.status === 'EXITED' ? 'text-rose-500' : 'text-emerald-400'
                                  }`}>{person.shares.toFixed(1)}%</span>
-                                 <p className="text-[7px] font-bold text-emerald-500/30 uppercase">Voting Equity</p>
+                                 <div className="flex flex-col items-end mt-1">
+                                    <p className="text-[7px] font-bold text-emerald-500/30 uppercase">Voting Equity</p>
+                                    {person.id === 'user' && isMonetized && (
+                                       <div className="flex flex-col items-end">
+                                          <span className="text-[8px] font-black text-blue-400 mt-0.5 animate-pulse">
+                                             Live: {totalUserEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MTX
+                                          </span>
+                                       </div>
+                                    )}
+                                 </div>
                               </div>
                            </div>
                         ))}
@@ -1195,9 +1518,12 @@ export default function App() {
                                        {Math.random() > 0.5 ? '+2.41' : '-1.12'}%
                                     </p>
                                  </div>
-                                 <button className="px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[9px] font-black text-emerald-400 uppercase tracking-widest hover:bg-emerald-500 hover:text-black transition-all">
-                                    Trade
-                                 </button>
+                                  <button 
+                                   onClick={() => setCurrentView('BANK')}
+                                   className="px-4 py-1.5 bg-emerald-500/20 border border-emerald-500/40 rounded text-[9px] font-black text-emerald-400 uppercase tracking-widest hover:bg-emerald-500 hover:text-black transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)]"
+                                  >
+                                     REDEEM THB
+                                  </button>
                               </div>
                            </div>
                          ))
@@ -1278,6 +1604,295 @@ export default function App() {
                     </div>
                  </div>
                </div>
+            </div>
+          ) : currentView === 'BANK' ? (
+            <div className="p-8 space-y-8 overflow-auto flex-1 bg-gradient-to-br from-emerald-950/10 to-transparent">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                  <Landmark className="w-6 h-6 text-emerald-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold uppercase tracking-widest text-emerald-300">Matrix Banking Gateway</h2>
+                  <p className="text-[10px] opacity-40 uppercase">THB Settlement & External Financial Integration</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {/* Available Pending Overview */}
+                <div className="p-8 bg-black/60 border border-cyan-500/20 rounded-xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <Zap className="w-12 h-12 text-cyan-400" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.4em] text-cyan-500/30 font-sans">Pending Matrix Earnings</span>
+                  <div className="mt-4 flex flex-col gap-1">
+                    <div className="flex items-baseline gap-3">
+                      <h3 className="text-4xl font-black text-cyan-300 drop-shadow-[0_0_20px_#22d3ee]">
+                        {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </h3>
+                      <span className="text-sm font-bold opacity-40">MTX</span>
+                    </div>
+                    <button 
+                      onClick={handleWithdraw}
+                      disabled={availableBalance <= 0 || isExporting}
+                      className="mt-4 w-full py-2 bg-cyan-500/10 border border-cyan-500/30 rounded text-[10px] font-black uppercase tracking-widest text-cyan-400 hover:bg-cyan-500 hover:text-black transition-all"
+                    >
+                      {isExporting ? 'PROCESSING...' : 'Move to Wallet'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Wallet Overview */}
+                <div className="p-8 bg-black/60 border border-blue-500/20 rounded-xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <Database className="w-12 h-12 text-blue-400" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-500/30 font-sans">Matrix Wallet Balance</span>
+                  <div className="mt-4 flex flex-col gap-1">
+                    <div className="flex items-baseline gap-3">
+                      <h3 className="text-4xl font-black text-blue-300 drop-shadow-[0_0_20px_#3b82f6]">
+                        {walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </h3>
+                      <span className="text-sm font-bold opacity-40">MTX</span>
+                    </div>
+                    <div className="text-[10px] mt-2 opacity-50 uppercase font-bold text-blue-400/60 italic font-sans animate-pulse">
+                      * Ready for Settlement
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bank Account Overview */}
+                <div className="p-8 bg-emerald-500/5 border border-emerald-500/20 rounded-xl relative overflow-hidden group shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <Landmark className="w-12 h-12 text-emerald-400" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-500/30 font-sans">Bank Balance (THB)</span>
+                  <div className="mt-4 flex flex-col gap-1">
+                    <div className="flex items-baseline gap-3">
+                      <h3 className="text-4xl font-black text-emerald-300 drop-shadow-[0_0_20px_#10b981]">
+                        {bankBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </h3>
+                      <span className="text-sm font-bold opacity-40">THB</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                       <div className={`w-2 h-2 rounded-full animate-pulse ${bankAccountNumber.length >= 10 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                       <span className={`text-[10px] font-black uppercase tracking-widest ${bankAccountNumber.length >= 10 ? 'text-emerald-400' : 'text-amber-400/60'}`}>
+                          {bankAccountNumber.length >= 10 ? `${selectedBank} Connected` : `Waiting for ${selectedBank} Info`}
+                       </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bank Selection & Transfer */}
+              <div className="p-8 border border-emerald-500/10 bg-black/40 rounded-xl space-y-8">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <h3 className="text-sm font-black uppercase tracking-[0.3em] opacity-40">Select Settlement Destination</h3>
+                  <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5">
+                    <span className="text-[9px] font-bold text-emerald-400 opacity-60 uppercase">System: Local Gateway (Thailand)</span>
+                  </div>
+                </div>
+
+                {/* Withdrawal Info Box */}
+                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl flex items-start gap-3">
+                  <div className="p-2 bg-emerald-500/20 rounded-lg">
+                    <Info className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-[11px] font-black uppercase text-emerald-400">เงื่อนไขการโอนเงิน (Withdrawal Rule)</h4>
+                    <p className="text-[10px] text-emerald-500/70 leading-relaxed font-sans mt-0.5">
+                       1. มียอดเหรียญขั้นต่ำรวมอย่างน้อย <span className="text-white font-black">0.001 MTX</span><br />
+                       2. กรอกหมายเลขบัญชีธนาคารให้ครบ <span className="text-white font-black">10 หลัก</span><br />
+                       3. ระบบจะโอนเงินเข้าบัญชี <span className="text-white font-black">{selectedBank}</span> ของคุณทันทีที่กดยืนยัน
+                    </p>
+                  </div>
+                </div>
+
+                {/* Account Number Input */}
+                <div className="space-y-3 bg-emerald-500/5 p-4 rounded-lg border border-emerald-500/10">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-emerald-400 block flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Enter Bank Account Number (กรอกเลขบัญชี 10 หลัก)
+                  </label>
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      inputMode="numeric"
+                      value={bankAccountNumber}
+                      onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))}
+                      placeholder="000-0-00000-0"
+                      className="w-full bg-black/80 border border-emerald-500/30 rounded-lg py-5 px-6 text-2xl font-mono text-emerald-300 placeholder:text-emerald-500/5 focus:outline-none focus:border-emerald-500 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)] transition-all font-black tracking-[0.2em]"
+                      maxLength={15}
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                       {bankAccountNumber.length >= 10 ? (
+                         <div className="flex items-center gap-1 text-[10px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-2 py-1 rounded">
+                            <ShieldCheck className="w-4 h-4" /> Ready
+                         </div>
+                       ) : (
+                         <button 
+                            onClick={() => setBankAccountNumber('1234567890')}
+                            className="flex items-center gap-1 text-[10px] font-black text-white bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded uppercase transition-colors"
+                         >
+                            <RefreshCw className="w-4 h-4" /> Quick Fill
+                         </button>
+                       )}
+                    </div>
+                  </div>
+                  <p className="text-[9px] font-bold text-white/30 uppercase italic font-sans">
+                    * บัญชีนี้ต้องเป็นชื่อของคุณเท่านั้น (This must be your own account)
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                    <motion.button 
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.98 }}
+                      animate={shouldShake ? { x: [-10, 10, -10, 10, 0] } : {}}
+                      transition={{ duration: 0.4 }}
+                      onClick={handleBankTransfer}
+                      disabled={isTransferringToBank}
+                      className={`w-full py-8 px-8 rounded-2xl font-black text-sm tracking-[0.3em] uppercase transition-all flex flex-col items-center justify-center gap-2 ${
+                        (walletBalance + availableBalance >= 0.001) && bankAccountNumber.length >= 10 && !isTransferringToBank
+                        ? 'bg-emerald-500 text-black shadow-[0_0_40px_rgba(16,185,129,0.5)] border-2 border-emerald-400' 
+                        : 'bg-white/10 text-white/40 border border-white/20'
+                      }`}
+                    >
+                      {isTransferringToBank ? (
+                        <>
+                          <div className="w-6 h-6 border-4 border-black border-t-transparent rounded-full animate-spin mb-1" />
+                          <span className="animate-pulse">SETTLING WITH {selectedBank}...</span>
+                          <span className="text-[9px] font-bold opacity-60">BOT-GATEWAY: PROCESSING TRANSACTION</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-3">
+                            <Landmark className="w-5 h-5" />
+                            <span>
+                               {bankAccountNumber.length < 10 
+                                  ? 'กรุณากรอกเลขบัญชี 10 หลัก' 
+                                  : (walletBalance + availableBalance < 0.001)
+                                     ? 'ยอดเงิน MTX ไม่เพียงพอ (ขั้นต่ำ 0.001)'
+                                     : `ยืนยันโอนเงินเข้าบัญชี ${selectedBank}`}
+                            </span>
+                          </div>
+                          {(walletBalance + availableBalance >= 0.001) && (
+                            <div className="flex flex-col items-center">
+                              <span className="text-[11px] font-black text-black/60 bg-white/20 px-3 py-0.5 rounded-full mt-1">
+                                 TOTAL PAYOUT: { ((walletBalance + availableBalance) * MTX_TO_THB).toLocaleString(undefined, { maximumFractionDigits: 0 }) } บาท (THB)
+                              </span>
+                              <span className="text-[9px] font-bold opacity-50 mt-1 italic">Real-time BOT Exchange Rate applied</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </motion.button>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { id: 'SCB', name: 'Siam Commercial', color: 'border-purple-500/30 text-purple-400 bg-purple-500/5', active: 'bg-purple-500/20 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]' },
+                    { id: 'KBANK', name: 'Kasikorn Bank', color: 'border-emerald-600/30 text-emerald-500 bg-emerald-600/5', active: 'bg-emerald-600/20 border-emerald-600 shadow-[0_0_15px_rgba(22,163,74,0.3)]' },
+                    { id: 'BBL', name: 'Bangkok Bank', color: 'border-blue-700/30 text-blue-600 bg-blue-700/5', active: 'bg-blue-700/20 border-blue-700 shadow-[0_0_15px_rgba(29,78,216,0.3)]' },
+                    { id: 'KRUNGTHAI', name: 'Krungthai Bank', color: 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5', active: 'bg-cyan-500/20 border-cyan-500 shadow-[0_0_15px_rgba(34,211,238,0.3)]' }
+                  ].map(bank => (
+                    <button
+                      key={bank.id}
+                      onClick={() => setSelectedBank(bank.id)}
+                      className={`relative h-24 p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all group ${
+                        selectedBank === bank.id 
+                        ? bank.active
+                        : 'bg-white/5 border-white/10 hover:border-white/20 grayscale opacity-60 hover:grayscale-0 hover:opacity-100'
+                      }`}
+                    >
+                      <Landmark className="w-6 h-6" />
+                      <div className="text-center">
+                        <p className="text-[11px] font-black uppercase tracking-widest">{bank.id}</p>
+                        <p className="text-[8px] font-bold opacity-40 uppercase truncate w-full px-2">{bank.name}</p>
+                      </div>
+                      {selectedBank === bank.id && (
+                        <div className="absolute top-2 right-2">
+                           <ShieldCheck className="w-3 h-3" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pt-8 border-t border-emerald-500/10">
+                  <div className="max-w-xl mx-auto space-y-6">
+                    <div className="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-lg text-center space-y-2">
+                      <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Exchange Rate Verification</p>
+                      <div className="flex items-center justify-center gap-4 text-2xl font-black">
+                        <span className="text-blue-400">1 MTX</span>
+                        <span className="text-emerald-500 opacity-20">{'='}</span>
+                        <span className="text-emerald-500">{MTX_TO_THB} THB</span>
+                      </div>
+                      <p className="text-[9px] font-medium opacity-40 uppercase italic tracking-tighter">
+                        * Provided by Bank of Thailand (BOT) API Gateway V2.1
+                      </p>
+                    </div>
+
+                    <motion.button 
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.98 }}
+                      animate={shouldShake ? { x: [-10, 10, -10, 10, 0] } : {}}
+                      transition={{ duration: 0.4 }}
+                      onClick={handleBankTransfer}
+                      disabled={isTransferringToBank}
+                      className={`w-full py-6 px-8 rounded-2xl font-black text-xs tracking-[0.3em] uppercase transition-all flex flex-col items-center justify-center gap-2 ${
+                        (walletBalance + availableBalance >= 0.001) && bankAccountNumber.length >= 10 && !isTransferringToBank
+                        ? 'bg-emerald-500 text-black shadow-[0_0_30px_rgba(16,185,129,0.3)]' 
+                        : 'bg-white/5 text-white/20 border border-white/10'
+                      }`}
+                    >
+                      {isTransferringToBank ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin mb-1" />
+                          <span className="animate-pulse">SETTLING WITH {selectedBank}...</span>
+                          <span className="text-[8px] font-bold opacity-60">BOT-GATEWAY: ESTABLISHING SECURE CONNECTION</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-3">
+                            <RefreshCw className="w-4 h-4" />
+                            <span>
+                               {bankAccountNumber.length < 10 
+                                  ? 'กรอกเลขบัญชี 10 หลัก' 
+                                  : (walletBalance + availableBalance < 0.1)
+                                     ? 'ยอด MTX ไม่เพียงพอ'
+                                     : `ยืนยันแลกเงินเข้า ${selectedBank}`}
+                            </span>
+                          </div>
+                          {(walletBalance + availableBalance >= 0.1) && (
+                            <span className="text-[9px] font-bold opacity-60 italic">
+                               ESTIMATED PAYOUT: { ((walletBalance + availableBalance) * MTX_TO_THB).toLocaleString(undefined, { maximumFractionDigits: 0 }) } บาท
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </motion.button>
+                    <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                       <p className="text-[10px] text-emerald-500/60 leading-relaxed text-center font-bold">
+                          * ระบบรองรับการแลกขั้นต่ำ 0.001 MTX (ถอนเข้า {selectedBank} ทันที)<br/>
+                          ตรวจสอบเลขบัญชีให้ถูกต้องก่อนยืนยัน
+                       </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 bg-black/40 border border-emerald-500/10 rounded-xl">
+                <div className="flex items-center gap-3 mb-4">
+                   <ShieldCheck className="w-4 h-4 text-amber-500" />
+                   <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-100">Settlement Agreement & Compliance</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-[9px] uppercase font-bold tracking-tight text-emerald-500/60 leading-relaxed italic">
+                   <p>* Your earnings are subject to Director commission rates and shareholder distribution protocols.</p>
+                   <p>* All bank transfers are verified against the current Matrix-THB exchange purity index.</p>
+                   <p>* Settled funds will appear in your official THB bank ledger within 1.5 seconds (Matrix Time).</p>
+                   <p>* All transactions are strictly monitored by the Ministry of Finance (MOF) for matrix stability.</p>
+                </div>
+              </div>
             </div>
           ) : currentView === 'PULSE' ? (
             <div className="p-8 flex-1 flex flex-col overflow-hidden">
