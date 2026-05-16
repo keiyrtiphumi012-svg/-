@@ -19,10 +19,16 @@ import {
   ExternalLink,
   RefreshCw,
   Archive,
-  AlertCircle
+  AlertCircle,
+  TrendingUp,
+  ShoppingCart,
+  ArrowUpRight,
+  ArrowDownRight,
+  Zap
 } from 'lucide-react';
 import { INITIAL_ASSETS, CryptoAsset } from './constants';
 import { AssetLore } from './components/AssetLore';
+import { MarketTicker } from './components/MarketTicker';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -30,7 +36,10 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAsset, setSelectedAsset] = useState<CryptoAsset | null>(null);
   const [time, setTime] = useState(new Date().toLocaleTimeString());
-  const [currentView, setCurrentView] = useState<'LOG' | 'MANAGER' | 'PULSE' | 'SECURITY'>('LOG');
+  const [currentView, setCurrentView] = useState<'LOG' | 'MANAGER' | 'PULSE' | 'SECURITY' | 'MARKET' | 'TREASURY'>('LOG');
+  const [assets, setAssets] = useState<CryptoAsset[]>(INITIAL_ASSETS);
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -61,14 +70,31 @@ export default function App() {
 
   const filteredAssets = useMemo(() => {
     setCurrentPage(1); // Reset to first page on search
-    return INITIAL_ASSETS.filter(asset => 
+    return assets.filter(asset => 
       asset.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       asset.owner.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [searchQuery]);
+  }, [searchQuery, assets]);
 
+  const totalValuation = useMemo(() => assets.reduce((sum, a) => sum + a.valuation, 0), [assets]);
   const totalPages = Math.ceil(filteredAssets.length / itemsPerPage);
+
+  const handleListAsset = (assetId: string) => {
+    if (!isRegistered) {
+      setShowRegisterModal(true);
+      return;
+    }
+    setAssets(prev => prev.map(a => a.id === assetId ? { ...a, isListed: !a.isListed } : a));
+    if (selectedAsset?.id === assetId) {
+      setSelectedAsset(prev => prev ? { ...prev, isListed: !prev.isListed } : null);
+    }
+  };
+
+  const handleRegister = () => {
+    setIsRegistered(true);
+    setShowRegisterModal(false);
+  };
   const paginatedAssets = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredAssets.slice(start, start + itemsPerPage);
@@ -154,9 +180,9 @@ export default function App() {
               <span className="text-[10px] px-2 py-0.5 border border-emerald-500/30 rounded text-emerald-500/60 font-normal">SEALED</span>
             </h1>
             <p className="text-[10px] opacity-40 uppercase truncate">
-              Total Assets: {INITIAL_ASSETS.length} | 
-              Valuation: {INITIAL_ASSETS.reduce((sum, a) => sum + a.valuation, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MTX | 
-              Status: Verified
+              Total Assets: {assets.length} | 
+              Market Cap: {(totalValuation / 1000000).toFixed(2)}M MTX | 
+              Reg: {isRegistered ? 'VERIFIED' : 'PENDING'}
             </p>
           </div>
         </div>
@@ -172,6 +198,7 @@ export default function App() {
           </div>
         </div>
       </header>
+      <MarketTicker assets={assets} />
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar Controls */}
@@ -182,6 +209,8 @@ export default function App() {
               {[
                 { id: 'LOG' as const, icon: Database, label: 'Asset Log' },
                 { id: 'MANAGER' as const, icon: Cpu, label: 'Node Manager' },
+                { id: 'MARKET' as const, icon: ShoppingCart, label: 'Marketplace' },
+                { id: 'TREASURY' as const, icon: ShieldCheck, label: 'Treasury' },
                 { id: 'PULSE' as const, icon: Activity, label: 'Network Pulse' },
                 { id: 'SECURITY' as const, icon: Lock, label: 'Security Core' },
               ].map((item) => (
@@ -439,6 +468,297 @@ export default function App() {
                   </div>
                </div>
             </div>
+          ) : currentView === 'TREASURY' ? (
+            <div className="p-8 space-y-8 overflow-auto flex-1 bg-gradient-to-br from-emerald-950/10 to-transparent">
+               <div className="flex items-center gap-4 mb-4">
+                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                   <ShieldCheck className="w-6 h-6 text-emerald-400" />
+                 </div>
+                 <div>
+                   <h2 className="text-xl font-bold uppercase tracking-widest text-emerald-300">Global Treasury</h2>
+                   <p className="text-[10px] opacity-40 uppercase">Capital Reserve & Funding Protocol Control</p>
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Total Cap */}
+                  <div className="p-8 bg-black/60 border border-emerald-500/20 rounded-xl relative overflow-hidden group">
+                     <div className="absolute inset-0 opacity-5 pointer-events-none">
+                        <div className="grid grid-cols-10 gap-1 h-full">
+                           {Array.from({ length: 10 }).map((_, i) => (
+                             <div key={i} className="bg-emerald-500 w-full" style={{ height: `${Math.random() * 100}%` }} />
+                           ))}
+                        </div>
+                     </div>
+                     <span className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-500/30">Matrix Total Cap (ทั้งหมด)</span>
+                     <div className="mt-4 flex items-baseline gap-3">
+                        <h3 className="text-4xl font-black text-emerald-300 drop-shadow-[0_0_20px_#10b981]">
+                           {INITIAL_ASSETS.reduce((sum, a) => sum + a.valuation, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </h3>
+                        <span className="text-sm font-bold opacity-40">MTX</span>
+                     </div>
+                     <div className="text-[10px] mt-4 opacity-40 uppercase font-bold tracking-widest flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                        Reserve Verified by AIS Protocols
+                     </div>
+                  </div>
+
+                  {/* Funding Support */}
+                  <div className="p-8 bg-emerald-500/5 border border-emerald-500/10 rounded-xl space-y-6">
+                    <div className="flex items-center justify-between">
+                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/60">AIS Funding Protocol</span>
+                       <span className="text-[9px] px-2 py-0.5 bg-cyan-400/10 border border-cyan-400/30 text-cyan-400 rounded font-bold">READY</span>
+                    </div>
+                    <div className="space-y-4">
+                       <p className="text-xs text-emerald-500/70 leading-relaxed uppercase font-medium">
+                          AIS provides computational credits and nodal liquidity for high-purity assets. 
+                          The current fund support is distributed across all 500 nodes.
+                       </p>
+                       <div className="flex items-center gap-4">
+                          <div className="flex-1 h-2 bg-emerald-950 rounded-full overflow-hidden">
+                             <div className="h-full bg-cyan-500/60 w-[72%]" />
+                          </div>
+                          <span className="text-[10px] font-bold text-cyan-400">72% Allocated</span>
+                       </div>
+                    </div>
+                    <button className="w-full py-2.5 bg-cyan-500/10 border border-cyan-500/30 rounded text-[10px] font-bold text-cyan-400 uppercase tracking-widest hover:bg-cyan-500/20 transition-all">
+                       Apply for Seed Funding
+                    </button>
+                  </div>
+               </div>
+
+               <div className="space-y-4">
+                  <h3 className="text-xs font-black uppercase tracking-[0.3em] opacity-30">Treasury Ledgers</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {[
+                      { label: 'Operational Reserve', value: '42.1M MTX', status: 'LOCKED' },
+                      { label: ' AIS Grant Pool', value: '15.5M MTX', status: 'ACTIVE' },
+                      { label: 'Liquidity Buffer', value: '9.2M MTX', status: 'STABLE' },
+                    ].map((item, i) => (
+                      <div key={i} className="p-5 border border-emerald-500/10 bg-black/40 rounded flex flex-col items-center justify-center text-center gap-1 group hover:border-emerald-500/30 transition-all">
+                        <p className="text-[9px] uppercase opacity-40 font-bold">{item.label}</p>
+                        <p className="text-lg font-black text-emerald-200">{item.value}</p>
+                        <span className="text-[8px] font-bold px-2 py-0.5 border border-emerald-500/20 text-emerald-500 group-hover:bg-emerald-500/10 transition-colors uppercase">
+                          {item.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+
+               <div className="p-6 border border-emerald-500/10 bg-black/40 rounded-lg">
+                  <div className="flex items-center justify-between mb-6">
+                     <h4 className="text-xs font-bold uppercase tracking-widest opacity-60">Capital Distribution Chart</h4>
+                     <div className="flex gap-4">
+                        <div className="flex items-center gap-2 text-[9px] uppercase opacity-60">
+                           <div className="w-2 h-2 bg-emerald-500 rounded" />
+                           Core Assets
+                        </div>
+                        <div className="flex items-center gap-2 text-[9px] uppercase opacity-60">
+                           <div className="w-2 h-2 bg-cyan-500/40 rounded" />
+                           Node Networks
+                        </div>
+                     </div>
+                  </div>
+                  <div className="h-40 flex items-end gap-1 px-4">
+                     {Array.from({ length: 60 }).map((_, i) => (
+                       <motion.div 
+                        key={i}
+                        initial={{ height: 0 }}
+                        animate={{ height: `${Math.random() * 80 + 20}%` }}
+                        transition={{ delay: i * 0.01, duration: 2, repeat: Infinity, repeatType: 'reverse' }}
+                        className={`flex-1 ${i % 3 === 0 ? 'bg-cyan-500/30' : 'bg-emerald-500/10'} hover:bg-emerald-500/50 transition-colors`}
+                       />
+                     ))}
+                  </div>
+               </div>
+            </div>
+          ) : currentView === 'MARKET' ? (
+            <div className="p-8 space-y-8 overflow-auto flex-1">
+               <div className="flex items-center justify-between mb-4">
+                 <div className="flex items-center gap-4">
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded">
+                      <ShoppingCart className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold uppercase tracking-widest text-emerald-300">Nodal Exchange</h2>
+                      <p className="text-[10px] opacity-40 uppercase">Decentralized High-Frequency Matrix Stock Market</p>
+                    </div>
+                 </div>
+                 <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded">
+                    <Zap className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold text-emerald-100 uppercase tracking-widest">Market Open</span>
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Market Index */}
+                  <div className="p-6 bg-black/40 border border-emerald-500/10 rounded-xl space-y-4">
+                     <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-30 text-emerald-400">MTX-500 Index</span>
+                     <div className="flex items-baseline gap-3">
+                        <span className="text-3xl font-black text-emerald-100 italic">12,419.82</span>
+                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                           <ArrowUpRight className="w-3 h-3" /> +1.42%
+                        </span>
+                     </div>
+                     <div className="h-12 flex items-end gap-1">
+                        {Array.from({ length: 30 }).map((_, i) => (
+                           <div key={i} className="flex-1 bg-emerald-500/20" style={{ height: `${Math.random() * 60 + 20}%` }} />
+                        ))}
+                     </div>
+                  </div>
+                  
+                  {/* Top Gainer */}
+                  <div className="p-6 bg-black/40 border border-emerald-500/10 rounded-xl space-y-4">
+                     <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-30 text-cyan-400">Top Nodal Gainer</span>
+                     <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-cyan-500/10 border border-cyan-500/30 rounded flex items-center justify-center">
+                           <TrendingUp className="w-5 h-5 text-cyan-400" />
+                        </div>
+                        <div>
+                           <p className="text-sm font-bold text-white uppercase">{INITIAL_ASSETS[0].name}</p>
+                           <p className="text-[10px] opacity-40 uppercase">+{ (Math.random() * 15 + 5).toFixed(2) }%</p>
+                        </div>
+                     </div>
+                     <div className="text-[10px] font-bold text-cyan-400 px-3 py-1 bg-cyan-500/5 border border-cyan-500/20 rounded w-fit uppercase">
+                        Squeeze Detected
+                     </div>
+                  </div>
+
+                  {/* Volume */}
+                  <div className="p-6 bg-black/40 border border-emerald-500/10 rounded-xl space-y-4">
+                     <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-30 text-amber-400">24H Trading Volume</span>
+                     <div className="flex items-baseline gap-3">
+                        <span className="text-3xl font-black text-amber-100 italic">4.2M</span>
+                        <span className="text-xs font-bold opacity-30 text-white">MTX</span>
+                     </div>
+                     <p className="text-[10px] opacity-40 uppercase font-bold tracking-widest mt-2 flex items-center gap-2">
+                        <RefreshCw className="w-3 h-3" /> Synchronized with Global Treasury
+                     </p>
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                 <div className="lg:col-span-2 space-y-6">
+                    <div className="flex items-center justify-between border-b border-emerald-500/10 pb-4">
+                      <h3 className="text-xs font-black uppercase tracking-[0.2em] opacity-30">Active Listings (ตลาดหุ้น)</h3>
+                      <div className="hidden md:flex gap-4">
+                         <span className="text-[10px] opacity-40 uppercase font-bold">Sort: Valuation</span>
+                         <span className="text-[10px] opacity-40 uppercase font-bold">Filter: Active</span>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                       {assets.filter(a => a.isListed).length > 0 ? (
+                         assets.filter(a => a.isListed).slice(0, 10).map((asset) => (
+                           <div 
+                            key={asset.id} 
+                            onClick={() => setSelectedAsset(asset)}
+                            className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded flex items-center justify-between group hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all cursor-pointer"
+                           >
+                              <div className="flex items-center gap-4">
+                                 <div className={`p-2 rounded ${Math.random() > 0.5 ? 'bg-emerald-400/10' : 'bg-rose-400/10'}`}>
+                                    {Math.random() > 0.5 ? <ArrowUpRight className="w-4 h-4 text-emerald-400" /> : <ArrowDownRight className="w-4 h-4 text-rose-400" />}
+                                 </div>
+                                 <div>
+                                    <p className="text-xs font-bold text-emerald-200 uppercase tracking-wide">{asset.name}</p>
+                                    <p className="text-[9px] opacity-30 font-mono italic">{asset.id}</p>
+                                 </div>
+                              </div>
+                              <div className="flex items-center gap-8">
+                                 <div className="hidden sm:block text-right">
+                                    <p className="text-[10px] font-bold text-white/40 uppercase">Purity</p>
+                                    <p className="text-[11px] font-bold text-emerald-400">{(asset.purity || 0).toFixed(2)}%</p>
+                                 </div>
+                                 <div className="text-right w-24">
+                                    <p className="text-xs font-black text-emerald-100">{asset.valuation.toLocaleString()} MTX</p>
+                                    <p className={`text-[9px] font-bold uppercase ${Math.random() > 0.5 ? 'text-emerald-500/40' : 'text-rose-500/40'}`}>
+                                       {Math.random() > 0.5 ? '+2.41' : '-1.12'}%
+                                    </p>
+                                 </div>
+                                 <button className="px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[9px] font-black text-emerald-400 uppercase tracking-widest hover:bg-emerald-500 hover:text-black transition-all">
+                                    Trade
+                                 </button>
+                              </div>
+                           </div>
+                         ))
+                       ) : (
+                         <div className="py-12 border border-dashed border-emerald-500/20 rounded-lg flex flex-col items-center justify-center text-emerald-500/30 gap-3">
+                            <AlertCircle className="w-8 h-8 opacity-20" />
+                            <p className="text-[10px] uppercase font-bold tracking-widest">No active listings in the current cycle</p>
+                            <button 
+                              onClick={() => setCurrentView('LOG')}
+                              className="text-[9px] underline hover:text-emerald-400 transition-colors uppercase font-bold"
+                            >
+                              Go to Asset Log to List Nodes
+                            </button>
+                         </div>
+                       )}
+                    </div>
+                 </div>
+
+                 <div className="space-y-8">
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] opacity-30 text-center lg:text-left">Nodal Trends</h3>
+                    
+                    <div className="p-6 bg-emerald-950/20 border border-emerald-500/20 rounded-xl space-y-6">
+                       <div className="flex flex-col items-center justify-center py-4 relative">
+                          <div className="absolute inset-0 bg-emerald-500/5 blur-3xl rounded-full" />
+                          <span className="text-4xl font-black text-emerald-500 drop-shadow-[0_0_15px_#10b981] relative">BULLISH</span>
+                          <span className="text-[10px] uppercase opacity-40 mt-2 font-black tracking-widest">Market Confidence</span>
+                       </div>
+                       
+                       <div className="space-y-4">
+                          <div className="space-y-2">
+                             <div className="flex justify-between text-[10px] font-black uppercase tracking-tight">
+                                <span className="opacity-40 italic">Buy Pressure</span>
+                                <span className="text-emerald-400">82.4%</span>
+                             </div>
+                             <div className="h-1.5 bg-emerald-950 rounded-full overflow-hidden p-0.5 border border-emerald-500/10">
+                                <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: '82.4%' }}
+                                  className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981]" 
+                                />
+                             </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                             <div className="flex justify-between text-[10px] font-black uppercase tracking-tight">
+                                <span className="opacity-40 italic">Sell Walls</span>
+                                <span className="text-rose-400">17.6%</span>
+                             </div>
+                             <div className="h-1.5 bg-emerald-950 rounded-full overflow-hidden p-0.5 border border-rose-500/10 text-right">
+                                <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: '17.6%' }}
+                                  className="h-full bg-rose-500 float-right shadow-[0_0_10px_#f43f5e]" 
+                                />
+                             </div>
+                          </div>
+                       </div>
+                       
+                       <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded flex flex-col gap-2">
+                          <span className="text-[9px] uppercase font-bold opacity-30 text-center">Protocol Advice</span>
+                          <p className="text-[10px] text-emerald-200 text-center leading-relaxed italic uppercase font-medium">
+                            Significant nodal accumulation detected in CORE sectors. Anticipating valuation spike.
+                          </p>
+                       </div>
+                    </div>
+
+                    <div className="p-6 border border-emerald-500/10 bg-black/40 rounded-xl space-y-4">
+                       <h4 className="text-[10px] font-black uppercase tracking-widest opacity-40">Recent Executions</h4>
+                       <div className="space-y-3">
+                          {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="flex justify-between items-center text-[10px]">
+                               <span className="opacity-40 uppercase truncate max-w-[100px]">{INITIAL_ASSETS[i+10].name}</span>
+                               <span className="font-mono text-emerald-500/60">SOLD</span>
+                               <span className="font-bold text-emerald-100">{(Math.random() * 1000).toFixed(2)} MTX</span>
+                            </div>
+                          ))}
+                       </div>
+                    </div>
+                 </div>
+               </div>
+            </div>
           ) : currentView === 'PULSE' ? (
             <div className="p-8 flex-1 flex flex-col overflow-hidden">
                 <div className="flex items-center gap-4 mb-8">
@@ -660,9 +980,20 @@ export default function App() {
                  </section>
               </div>
 
-              <div className="p-6 border-t border-emerald-500/20 bg-black/40">
-                 <button className="w-full py-3 bg-emerald-500 text-black font-black uppercase text-xs tracking-widest rounded hover:bg-emerald-400 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2">
-                    <RefreshCw className="w-4 h-4" />
+              <div className="p-6 border-t border-emerald-500/20 bg-black/40 space-y-3">
+                 <button 
+                  onClick={() => handleListAsset(selectedAsset.id)}
+                  className={`w-full py-3 font-black uppercase text-xs tracking-widest rounded transition-all flex items-center justify-center gap-2 ${
+                    selectedAsset.isListed 
+                    ? 'bg-rose-500/20 border border-rose-500/40 text-rose-400 hover:bg-rose-500/30' 
+                    : 'bg-emerald-500 text-black hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]'
+                  }`}
+                 >
+                    <TrendingUp className="w-4 h-4" />
+                    {selectedAsset.isListed ? 'Delist from Nodal Exchange' : 'List on Nodal Exchange'}
+                 </button>
+                 <button className="w-full py-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black uppercase text-[10px] tracking-widest rounded hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2">
+                    <RefreshCw className="w-3 h-3" />
                     Re-Verify Node
                  </button>
                  <p className="text-center text-[9px] opacity-30 mt-4 uppercase">Protocol Version: 9.01.Alpha</p>
@@ -685,10 +1016,65 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center gap-6 text-emerald-500/40">
-           <span className="hidden sm:inline">User: {selectedAsset?.owner || 'AUTHENTICATED_GUEST'}</span>
+          <div className="flex items-center gap-2">
+            <div className={`w-1.5 h-1.5 rounded-full ${isRegistered ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+            <span>Exchange Reg: {isRegistered ? 'VERIFIED' : 'UNREGISTERED'}</span>
+          </div>
+          <span className="hidden sm:inline">User: {selectedAsset?.owner || 'AUTHENTICATED_GUEST'}</span>
            <span className="text-emerald-500/60 transition-all hover:text-emerald-400 cursor-help underline underline-offset-4 decoration-emerald-500/20">Protocol Docs</span>
         </div>
       </footer>
+      <AnimatePresence>
+        {showRegisterModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowRegisterModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-sm bg-[#0a0a0a] border border-emerald-500/30 rounded-xl p-8 shadow-[0_0_50px_rgba(16,185,129,0.2)]"
+            >
+              <div className="flex flex-col items-center text-center space-y-6">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
+                  <User className="w-8 h-8 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black uppercase tracking-[0.2em] text-emerald-300">Trader Registration</h3>
+                  <p className="text-[10px] opacity-40 uppercase font-bold mt-2 leading-relaxed">
+                    A valid trader identity is required to interact with the Nodal Exchange protocols.
+                  </p>
+                </div>
+                <div className="w-full space-y-4">
+                  <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded text-left">
+                    <span className="text-[9px] uppercase font-bold opacity-30">Identity Hash (Computed)</span>
+                    <p className="text-[10px] font-mono text-emerald-500/60 truncate mt-1">
+                      0x{Math.random().toString(16).substring(2, 34).toUpperCase()}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={handleRegister}
+                    className="w-full py-3 bg-emerald-500 text-black font-black uppercase text-xs tracking-widest rounded hover:bg-emerald-400 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                  >
+                    Confirm Registration
+                  </button>
+                  <button 
+                    onClick={() => setShowRegisterModal(false)}
+                    className="w-full py-2.5 text-[10px] uppercase font-bold text-emerald-500/40 hover:text-emerald-500 transition-colors"
+                  >
+                    Abort Protocol
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

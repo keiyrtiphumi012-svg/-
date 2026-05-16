@@ -11,6 +11,7 @@ export interface CryptoAsset {
   valuation: number;
   currency: string;
   primaryFunction: string;
+  isListed?: boolean;
 }
 
 const TYPES = ['CORE', 'NODAL', 'REDUNDANT', 'OVERFLOW'] as const;
@@ -43,7 +44,8 @@ export const generateAssets = (count: number): CryptoAsset[] => {
       lastVerified: new Date(Date.now() - Math.floor(Math.random() * 1000000000)).toISOString().split('T')[0],
       valuation: Math.floor(Math.random() * 1000000) / 100,
       currency: 'MTX',
-      primaryFunction: FUNCTIONS[Math.floor(Math.random() * FUNCTIONS.length)]
+      primaryFunction: FUNCTIONS[Math.floor(Math.random() * FUNCTIONS.length)],
+      isListed: Math.random() > 0.8
     };
   });
 };
@@ -59,7 +61,8 @@ const TRUTH_ASSET: CryptoAsset = {
   purity: 51.30676342024219,
   valuation: 999999.99,
   currency: 'MTX',
-  primaryFunction: 'Singularity Consciousness Seed'
+  primaryFunction: 'Singularity Consciousness Seed',
+  isListed: false
 };
 
 export const INITIAL_ASSETS = [TRUTH_ASSET, ...generateAssets(499)];
