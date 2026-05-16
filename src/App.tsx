@@ -17,6 +17,7 @@ import {
   Hash, 
   User, 
   ExternalLink,
+  Download,
   RefreshCw,
   Archive,
   AlertCircle,
@@ -24,8 +25,21 @@ import {
   ShoppingCart,
   ArrowUpRight,
   ArrowDownRight,
-  Zap
+  Zap,
+  BarChart as BarChartIcon
 } from 'lucide-react';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell
+} from 'recharts';
 import { INITIAL_ASSETS, CryptoAsset } from './constants';
 import { AssetLore } from './components/AssetLore';
 import { MarketTicker } from './components/MarketTicker';
@@ -40,7 +54,24 @@ export default function App() {
   const [assets, setAssets] = useState<CryptoAsset[]>(INITIAL_ASSETS);
   const [isRegistered, setIsRegistered] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [isMonetized, setIsMonetized] = useState(false);
+  const [reinvestmentRate, setReinvestmentRate] = useState(25); // 25% reinvestment by default
+  const [commissionRate, setCommissionRate] = useState(50); // 50% commission as requested
+  const [isDomainRegistered, setIsDomainRegistered] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [treasuryShares, setTreasuryShares] = useState(0);
+  const [isExitTriggered, setIsExitTriggered] = useState(false);
   
+  const stakeholders = useMemo(() => [
+    { id: 'mof', name: 'Ministry of Finance (TH)', shares: 42.0, role: 'REGULATORY', status: 'VERIFIED' },
+    { id: 'ais', name: 'AIS Network Infrastructure', shares: 28.5, role: 'PROVIDER', status: 'ACTIVE' },
+    { id: 'user', name: 'Executive Director (You)', shares: 4.0, role: 'DIRECTOR', status: 'VERIFIED' },
+    { id: 'founders', name: 'Matrix Core Founders', shares: 15.0, role: 'TECHNICAL', status: 'LOCKED' },
+    { id: 'public', name: 'Public Nodal Partners', shares: isExitTriggered ? 0 : 10.5, role: 'THIRD_PARTY', status: isExitTriggered ? 'EXITED' : 'TRADING' }
+  ], [isExitTriggered]);
+
+  const totalBuybackEquity = useMemo(() => treasuryShares + (isExitTriggered ? 10.5 : 0), [treasuryShares, isExitTriggered]);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
@@ -78,7 +109,73 @@ export default function App() {
   }, [searchQuery, assets]);
 
   const totalValuation = useMemo(() => assets.reduce((sum, a) => sum + a.valuation, 0), [assets]);
+  const MTX_TO_THB = 175.50; // Current Matrix Exchange Rate in THB
+  const adRevenue = isMonetized ? totalValuation * 0.00042 : 0;
+  const domainCost = 50.00;
   const totalPages = Math.ceil(filteredAssets.length / itemsPerPage);
+  
+  const trendData = useMemo(() => {
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    let baseVal = totalValuation * 0.8;
+    return months.map((month) => {
+      baseVal += (Math.random() - 0.35) * (totalValuation * 0.06);
+      return {
+        name: month,
+        valuation: Math.floor(baseVal),
+        revenue: Math.floor(baseVal * 0.00042)
+      };
+    });
+  }, [totalValuation]);
+
+  const assetDistributionData = useMemo(() => {
+    const types = ['CORE', 'NODAL', 'REDUNDANT', 'OVERFLOW'];
+    return types.map(type => ({
+      name: type,
+      count: assets.filter(a => a.type === type).length,
+      valuation: assets.filter(a => a.type === type).reduce((sum, a) => sum + a.valuation, 0)
+    }));
+  }, [assets]);
+
+  const handleRegisterDomain = () => {
+    if (adRevenue >= domainCost) {
+      setIsDomainRegistered(true);
+    }
+  };
+
+  const handleThirdPartyExit = () => {
+    if (!isExitTriggered) {
+      setIsExitTriggered(true);
+      // Simulate treasury absorbing the shares
+      setTreasuryShares(prev => prev + 10.5);
+    }
+  };
+
+  const handleExportData = () => {
+    setIsExporting(true);
+    const exportData = {
+      protocol: 'MATRIX_VAULT_NODE',
+      network: 'AIS_CLOUD_PRO',
+      authority: 'MOF_SUPPORTED',
+      timestamp: new Date().toISOString(),
+      summary: {
+        totalAssets: assets.length,
+        totalValuationMTX: totalValuation,
+        adRevenueGenerated: adRevenue
+      },
+      registry: assets
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `matrix_registry_${new Date().getTime()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setTimeout(() => setIsExporting(false), 2000);
+  };
 
   const handleListAsset = (assetId: string) => {
     if (!isRegistered) {
@@ -176,13 +273,26 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-sm font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-              Matrix Global Registry
-              <span className="text-[10px] px-2 py-0.5 border border-emerald-500/30 rounded text-emerald-500/60 font-normal">SEALED</span>
+              {isDomainRegistered ? 'matrix-vault.network' : 'Matrix Global Corporation (PCL)'}
+              <div className="flex gap-1">
+                <span className={`text-[10px] px-2 py-0.5 border rounded font-normal ${isDomainRegistered ? 'border-cyan-500/30 text-cyan-500/60' : 'border-emerald-500/30 text-emerald-500/60'}`}>
+                  {isDomainRegistered ? 'CORPORATE_ENTITY' : 'BOARD_CERTIFIED'}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 border border-amber-500/30 rounded text-amber-500/60 font-black italic bg-amber-500/5">
+                  MOF_SUPPORTED
+                </span>
+                <div className="flex items-center gap-1 px-2 py-0.5 border border-blue-500/30 rounded bg-blue-500/5">
+                   <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse" />
+                   <span className="text-[10px] text-blue-500/60 font-black tracking-tighter">
+                     AIS_CLOUD_PRO
+                   </span>
+                </div>
+              </div>
             </h1>
             <p className="text-[10px] opacity-40 uppercase truncate">
+              REG_NO: 0105569000421 | 
               Total Assets: {assets.length} | 
-              Market Cap: {(totalValuation / 1000000).toFixed(2)}M MTX | 
-              Reg: {isRegistered ? 'VERIFIED' : 'PENDING'}
+              Market Cap: {(totalValuation / 1000000).toFixed(2)}M MTX
             </p>
           </div>
         </div>
@@ -229,7 +339,7 @@ export default function App() {
 
             <div className="hidden md:block pt-6 border-t border-emerald-500/10">
               <span className="text-[10px] uppercase font-bold opacity-30 tracking-widest block mb-4">Diagnostics</span>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between text-[9px] opacity-60">
                     <span>Core Load</span>
@@ -247,6 +357,47 @@ export default function App() {
                   <div className="h-0.5 w-full bg-emerald-950">
                     <div className="h-full bg-emerald-500/60 w-[88%]" />
                   </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5 pt-2">
+                  <div className="flex justify-between text-[9px] opacity-60">
+                    <span className="text-amber-500/60 font-black">Regulatory Sync (MOF)</span>
+                    <span className="text-amber-500/60">98.4%</span>
+                  </div>
+                  <div className="h-0.5 w-full bg-amber-950/20">
+                    <div className="h-full bg-amber-500/40 w-[98.4%]" />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5 pt-2">
+                   <div className="flex justify-between text-[9px] opacity-60">
+                     <span className="text-blue-500/60 font-black">AIS Cloud (TH-BANGKOK-1)</span>
+                     <span className="text-blue-500/80 font-mono">ENCRYPTED</span>
+                   </div>
+                   <div className="h-0.5 w-full bg-blue-950/20 flex gap-0.5">
+                     <div className="h-full bg-blue-500/60 w-1/4 shadow-[0_0_8px_#3b82f6]" />
+                     <div className="h-full bg-blue-500/60 w-1/4 shadow-[0_0_8px_#3b82f6]" />
+                     <div className="h-full bg-blue-500/60 w-1/4 shadow-[0_0_8px_#3b82f6]" />
+                     <div className="h-full bg-blue-500/60 w-1/4 animate-pulse shadow-[0_0_12px_#3b82f6]" />
+                   </div>
+                   <p className="text-[7px] text-blue-500/40 uppercase font-bold mt-1">Provider: AIS Business Cloud v4.2</p>
+                </div>
+
+                <div className="pt-4 border-t border-emerald-500/10">
+                   <button 
+                    onClick={() => setIsMonetized(!isMonetized)}
+                    className={`w-full py-2 px-3 border rounded flex items-center justify-between group transition-all ${
+                      isMonetized 
+                      ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.1)]' 
+                      : 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500/40 hover:border-emerald-500/30'
+                    }`}
+                   >
+                     <div className="flex items-center gap-2">
+                        <Zap className={`w-3 h-3 ${isMonetized ? 'animate-pulse text-cyan-400' : ''}`} />
+                        <span className="text-[9px] font-black uppercase tracking-widest">Protocol Ads</span>
+                     </div>
+                     <span className="text-[8px] font-mono leading-none">{isMonetized ? 'ACTIVE' : 'IDLE'}</span>
+                   </button>
                 </div>
               </div>
             </div>
@@ -407,9 +558,9 @@ export default function App() {
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                  {[
                    { label: 'Core Integrity', val: '98.4%', sub: 'Target: 99.0%', color: 'text-emerald-400' },
-                   { label: 'Active Sync', val: '3,421', sub: 'Nodes/Sec', color: 'text-cyan-400' },
-                   { label: 'Memory Drain', val: '12.8TB', sub: 'Buffer Load', color: 'text-amber-400' },
-                   { label: 'Uptime', val: '312D', sub: 'Current Cycle', color: 'text-emerald-400' }
+                   { label: 'AIS Edge Latency', val: '0.8ms', sub: 'TH-BK-1 Optimized', color: 'text-blue-400' },
+                   { label: 'Cloud Distribution', val: 'AIS_PRO', sub: 'Zone: Central-1', color: 'text-cyan-400' },
+                   { label: 'Network Uptime', val: '99.99%', sub: 'SLA Guaranteed', color: 'text-emerald-400' }
                  ].map((stat, i) => (
                    <div key={i} className="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-lg hover:bg-emerald-500/10 transition-colors group">
                       <span className="text-[10px] uppercase font-bold opacity-30 tracking-[0.2em]">{stat.label}</span>
@@ -491,11 +642,17 @@ export default function App() {
                         </div>
                      </div>
                      <span className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-500/30">Matrix Total Cap (ทั้งหมด)</span>
-                     <div className="mt-4 flex items-baseline gap-3">
-                        <h3 className="text-4xl font-black text-emerald-300 drop-shadow-[0_0_20px_#10b981]">
-                           {INITIAL_ASSETS.reduce((sum, a) => sum + a.valuation, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </h3>
-                        <span className="text-sm font-bold opacity-40">MTX</span>
+                     <div className="mt-4 flex flex-col gap-1">
+                        <div className="flex items-baseline gap-3">
+                           <h3 className="text-4xl font-black text-emerald-300 drop-shadow-[0_0_20px_#10b981]">
+                              {totalValuation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                           </h3>
+                           <span className="text-sm font-bold opacity-40">MTX</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs font-bold text-emerald-500/60 uppercase tracking-tighter">
+                           ≈ {(totalValuation * MTX_TO_THB).toLocaleString()} THB
+                           <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded">Rate: 1 MTX = {MTX_TO_THB} THB</span>
+                        </div>
                      </div>
                      <div className="text-[10px] mt-4 opacity-40 uppercase font-bold tracking-widest flex items-center gap-2">
                         <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
@@ -528,6 +685,174 @@ export default function App() {
                </div>
 
                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                      <div className="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                        <p className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-2">Resource Efficiency</p>
+                        <p className="text-2xl font-black text-emerald-300">94.2%</p>
+                        <div className="mt-2 h-1 bg-emerald-950 rounded-full overflow-hidden">
+                           <div className="h-full bg-emerald-500 w-[94.2%]" />
+                        </div>
+                      </div>
+                      <div className="p-6 bg-cyan-500/5 border border-cyan-500/10 rounded-xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-40 transition-opacity">
+                           <Zap className="w-8 h-8 text-cyan-400" />
+                        </div>
+                        <p className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-2">Total Ad Revenue</p>
+                        <div className="flex items-baseline gap-2">
+                           <p className="text-2xl font-black text-cyan-300">
+                             {adRevenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                           </p>
+                           <span className="text-[10px] font-bold text-cyan-500/40 uppercase">MTX</span>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-cyan-500/10 pt-4">
+                           <div className="flex flex-col">
+                              <span className="text-[8px] font-black uppercase text-cyan-500/40 italic">Self-Promotion Fund</span>
+                              <span className="text-xs font-black text-cyan-400">
+                                 {(adRevenue * (reinvestmentRate / 100)).toLocaleString(undefined, { maximumFractionDigits: 2 })} MTX
+                              </span>
+                           </div>
+                           <div className="flex flex-col items-end">
+                              <span className="text-[8px] font-black uppercase text-cyan-500/40 italic text-right">Director Commission (Fee)</span>
+                              <span className="text-xs font-black text-blue-400 text-right">
+                                 {(adRevenue * (commissionRate / 100)).toLocaleString(undefined, { maximumFractionDigits: 2 })} MTX
+                              </span>
+                           </div>
+                        </div>
+                      </div>
+                   </div>
+
+                   <div className="p-6 bg-black/40 border border-emerald-500/10 rounded-xl space-y-6">
+                      <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4 text-amber-500" />
+                            <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-100">Ministry Regulatory Oversight</h3>
+                         </div>
+                         <div className="flex gap-2">
+                            <div className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded text-[8px] font-bold text-amber-400 uppercase">
+                               กระทรวงการคลัง
+                            </div>
+                            {isDomainRegistered && (
+                               <div className="px-2 py-0.5 bg-cyan-500/10 border border-cyan-500/20 rounded text-[8px] font-bold text-cyan-400 uppercase">
+                                  DOMAIN_ACTIVE
+                               </div>
+                            )}
+                            <div className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-[8px] font-bold text-emerald-400 uppercase">
+                               Cycle 14.b
+                            </div>
+                         </div>
+                      </div>
+
+                      <div className="pt-6 border-t border-emerald-500/10 grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div className="flex items-center gap-4">
+                            <div className="p-2 bg-blue-500/10 rounded-full">
+                               <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-[0_0_8px_#60a5fa]" />
+                            </div>
+                            <div>
+                               <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest">AIS External Sync</p>
+                               <p className="text-[8px] text-blue-500/60 uppercase font-bold">Encrypted Tunnel: Passive</p>
+                            </div>
+                         </div>
+                         <button 
+                           onClick={handleExportData}
+                           className={`py-3 px-6 rounded-lg font-black text-[10px] tracking-[0.2em] uppercase flex items-center justify-center gap-2 transition-all ${
+                             isExporting 
+                             ? 'bg-blue-500 text-white shadow-[0_0_20px_rgba(59,130,246,0.4)]' 
+                             : 'bg-white/5 border border-white/10 text-white/40 hover:bg-white/10 hover:border-white/20'
+                           }`}
+                         >
+                           {isExporting ? (
+                             <>
+                               <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                               COMPILING_BLAST
+                             </>
+                           ) : (
+                             <>
+                               <Download className="w-3 h-3" />
+                               Export Registry Data
+                             </>
+                           )}
+                         </button>
+                      </div>
+
+                      <div className="space-y-6">
+                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="space-y-3">
+                               <div className="flex justify-between items-end">
+                                  <span className="text-[10px] font-bold uppercase opacity-40">Ad Reinvestment Rate</span>
+                                  <span className="text-sm font-black text-emerald-400">{reinvestmentRate}%</span>
+                               </div>
+                               <input 
+                                 type="range" 
+                                 min="0" 
+                                 max="100" 
+                                 value={reinvestmentRate} 
+                                 onChange={(e) => setReinvestmentRate(parseInt(e.target.value))}
+                                 className="w-full h-1 bg-emerald-950 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                               />
+                               <div className="flex justify-between text-[8px] font-bold opacity-30 uppercase tracking-tighter">
+                                  <span>Profit Focus</span>
+                                  <span>Aggressive Growth</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                               <div className="flex justify-between items-end">
+                                  <span className="text-[10px] font-bold uppercase opacity-40">Director Commison (Agent Fee)</span>
+                                  <span className="text-sm font-black text-blue-400">{commissionRate}%</span>
+                               </div>
+                               <input 
+                                 type="range" 
+                                 min="0" 
+                                 max="100" 
+                                 value={commissionRate} 
+                                 onChange={(e) => setCommissionRate(parseInt(e.target.value))}
+                                 className="w-full h-1 bg-blue-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                               />
+                               <div className="flex justify-between text-[8px] font-bold opacity-30 uppercase tracking-tighter">
+                                  <span>Pro-Bono</span>
+                                  <span>Maximum Profit</span>
+                               </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                               <span className="text-[10px] font-bold uppercase opacity-40">Infrastructure Upgrades</span>
+                               <button 
+                                 onClick={handleRegisterDomain}
+                                 disabled={isDomainRegistered || adRevenue < domainCost}
+                                 className={`w-full py-3 px-4 border rounded flex items-center justify-between group transition-all ${
+                                   isDomainRegistered 
+                                   ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 opacity-60 cursor-default' 
+                                   : adRevenue >= domainCost
+                                      ? 'bg-emerald-500 text-black hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]'
+                                      : 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500/40 cursor-not-allowed'
+                                 }`}
+                               >
+                                 <div className="flex items-center gap-2">
+                                    <ExternalLink className="w-3 h-3" />
+                                    <span className="text-[9px] font-black uppercase tracking-widest">
+                                       {isDomainRegistered ? 'Domain Registered' : 'Register Protocol Domain'}
+                                    </span>
+                                 </div>
+                                 {!isDomainRegistered && (
+                                    <span className="text-[9px] font-mono leading-none">-{domainCost} MTX</span>
+                                 )}
+                               </button>
+                               {!isDomainRegistered && adRevenue < domainCost && (
+                                  <p className="text-[8px] text-rose-500/60 uppercase font-bold italic tracking-tighter">
+                                     Insufficient Ad Profit (Need { (domainCost - adRevenue).toFixed(2) } MTX more)
+                                  </p>
+                               )}
+                            </div>
+                         </div>
+
+                         <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
+                            <p className="text-[9px] text-emerald-200/60 leading-relaxed italic uppercase font-medium">
+                               A portion of the MTX ad revenue is recycled back into the High-Frequency Matrix. {isDomainRegistered ? 'The matrix-vault.network domain is now strictly binding all nodal communications.' : 'Domain registration will verify your network identity globally.'}
+                            </p>
+                         </div>
+                      </div>
+                   </div>
+
                   <h3 className="text-xs font-black uppercase tracking-[0.3em] opacity-30">Treasury Ledgers</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[
@@ -547,29 +872,213 @@ export default function App() {
                </div>
 
                <div className="p-6 border border-emerald-500/10 bg-black/40 rounded-lg">
-                  <div className="flex items-center justify-between mb-6">
-                     <h4 className="text-xs font-bold uppercase tracking-widest opacity-60">Capital Distribution Chart</h4>
+                  <div className="flex items-center justify-between mb-8">
+                     <div>
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-emerald-100">Valuation Cycles</h4>
+                        <p className="text-[9px] opacity-40 uppercase mt-1">12-Month Projected Nodal Yield</p>
+                     </div>
                      <div className="flex gap-4">
-                        <div className="flex items-center gap-2 text-[9px] uppercase opacity-60">
-                           <div className="w-2 h-2 bg-emerald-500 rounded" />
-                           Core Assets
+                        <div className="flex items-center gap-2 text-[9px] uppercase font-bold text-emerald-500/60">
+                           <div className="w-2 h-2 bg-emerald-500/40 rounded-sm" />
+                           Valuation (MTX)
                         </div>
-                        <div className="flex items-center gap-2 text-[9px] uppercase opacity-60">
-                           <div className="w-2 h-2 bg-cyan-500/40 rounded" />
-                           Node Networks
+                        <div className="flex items-center gap-2 text-[9px] uppercase font-bold text-cyan-400/60">
+                           <div className="w-2 h-2 bg-cyan-400/40 rounded-sm" />
+                           Ad Yield
                         </div>
                      </div>
                   </div>
-                  <div className="h-40 flex items-end gap-1 px-4">
-                     {Array.from({ length: 60 }).map((_, i) => (
-                       <motion.div 
-                        key={i}
-                        initial={{ height: 0 }}
-                        animate={{ height: `${Math.random() * 80 + 20}%` }}
-                        transition={{ delay: i * 0.01, duration: 2, repeat: Infinity, repeatType: 'reverse' }}
-                        className={`flex-1 ${i % 3 === 0 ? 'bg-cyan-500/30' : 'bg-emerald-500/10'} hover:bg-emerald-500/50 transition-colors`}
-                       />
-                     ))}
+                  
+                  <div className="h-64 w-full">
+                     <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                           <defs>
+                              <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                                 <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                              </linearGradient>
+                              <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                                 <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3}/>
+                                 <stop offset="95%" stopColor="#22d3ee" stopOpacity={0}/>
+                              </linearGradient>
+                           </defs>
+                           <CartesianGrid strokeDasharray="3 3" stroke="#10b98110" vertical={false} />
+                           <XAxis 
+                              dataKey="name" 
+                              stroke="#10b98140" 
+                              fontSize={10} 
+                              tickLine={false} 
+                              axisLine={false}
+                              dy={10}
+                           />
+                           <YAxis 
+                              stroke="#10b98140" 
+                              fontSize={10} 
+                              tickLine={false} 
+                              axisLine={false}
+                              tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                           />
+                           <Tooltip 
+                              contentStyle={{ 
+                                 backgroundColor: '#050505', 
+                                 border: '1px solid #10b98130',
+                                 borderRadius: '4px',
+                                 fontSize: '10px',
+                                 textTransform: 'uppercase',
+                                 color: '#10b981'
+                              }}
+                              itemStyle={{ color: '#10b981' }}
+                              cursor={{ stroke: '#10b98130' }}
+                           />
+                           <Area 
+                              type="monotone" 
+                              dataKey="valuation" 
+                              stroke="#10b981" 
+                              strokeWidth={2}
+                              fillOpacity={1} 
+                              fill="url(#colorVal)" 
+                           />
+                           <Area 
+                              type="monotone" 
+                              dataKey="revenue" 
+                              stroke="#22d3ee" 
+                              strokeWidth={2}
+                              fillOpacity={1} 
+                              fill="url(#colorRev)" 
+                           />
+                        </AreaChart>
+                     </ResponsiveContainer>
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="p-6 border border-emerald-500/10 bg-black/40 rounded-lg">
+                     <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-2">
+                           <User className="w-4 h-4 text-emerald-400" />
+                           <h4 className="text-xs font-bold uppercase tracking-widest text-emerald-100">Official Shareholder Registry</h4>
+                        </div>
+                        <span className="text-[8px] font-black text-emerald-500/40 uppercase tracking-tighter">SEC_AUDITED_BOOK</span>
+                     </div>
+                     <div className="space-y-3">
+                        {stakeholders.map((person, i) => (
+                           <div key={i} className={`flex items-center justify-between p-3 border rounded transition-all font-sans ${
+                             person.status === 'EXITED' 
+                             ? 'bg-rose-500/5 border-rose-500/20 opacity-60' 
+                             : 'bg-white/5 border-white/5 hover:border-emerald-500/20'
+                           }`}>
+                              <div className="flex flex-col">
+                                 <span className={`text-[10px] font-black uppercase tracking-tight ${
+                                   person.status === 'EXITED' ? 'text-rose-400' : 'text-emerald-100'
+                                 }`}>{person.name}</span>
+                                 <div className="flex gap-2">
+                                    <span className="text-[8px] font-bold text-emerald-500/40">{person.role}</span>
+                                    <span className={`text-[8px] font-bold italic ${
+                                      person.status === 'EXITED' ? 'text-rose-500/60' : 'text-amber-500/40'
+                                    }`}>{person.status}</span>
+                                 </div>
+                              </div>
+                              <div className="text-right">
+                                 <span className={`text-sm font-black font-mono ${
+                                   person.status === 'EXITED' ? 'text-rose-500' : 'text-emerald-400'
+                                 }`}>{person.shares.toFixed(1)}%</span>
+                                 <p className="text-[7px] font-bold text-emerald-500/30 uppercase">Voting Equity</p>
+                              </div>
+                           </div>
+                        ))}
+                        
+                        {isExitTriggered && (
+                           <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 border-dashed rounded flex items-center justify-between animate-pulse">
+                              <div className="flex items-center gap-2">
+                                 <RefreshCw className="w-3 h-3 text-emerald-400" />
+                                 <div>
+                                    <p className="text-[9px] font-black text-emerald-400 uppercase">Treasury Reclamation</p>
+                                    <p className="text-[7px] text-emerald-500/60 uppercase font-bold">Protocol: Buyback & Name Return</p>
+                                 </div>
+                              </div>
+                              <span className="text-xs font-black text-emerald-400">+{treasuryShares.toFixed(1)}%</span>
+                           </div>
+                        )}
+                     </div>
+
+                     <div className="mt-4 pt-4 border-t border-white/5">
+                        <button 
+                           onClick={handleThirdPartyExit}
+                           disabled={isExitTriggered}
+                           className={`w-full py-2 px-4 rounded text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
+                             isExitTriggered 
+                             ? 'bg-emerald-500/10 text-emerald-500/40 cursor-not-allowed border border-emerald-500/10' 
+                             : 'bg-rose-500 text-white hover:bg-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+                           }`}
+                        >
+                           {isExitTriggered ? 'All External Names Reclaimed' : 'Trigger 3rd-Party Exit Protocol'}
+                        </button>
+                        <p className="text-[7px] text-emerald-500/40 uppercase mt-2 italic text-center">
+                           * Article 12: Corporations must reclaim identity references upon 3rd-party liquidation.
+                        </p>
+                     </div>
+                  </div>
+
+                  <div className="p-6 border border-emerald-500/10 bg-black/40 rounded-lg">
+                     <div className="flex items-center justify-between mb-6">
+                        <h4 className="text-xs font-bold uppercase tracking-widest opacity-60">Capital Distribution</h4>
+                        <BarChartIcon className="w-3 h-3 opacity-20" />
+                     </div>
+                     <div className="h-48 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                           <BarChart data={assetDistributionData}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#10b98105" vertical={false} />
+                              <XAxis 
+                                 dataKey="name" 
+                                 stroke="#10b98140" 
+                                 fontSize={9} 
+                                 tickLine={false} 
+                                 axisLine={false}
+                              />
+                              <YAxis hide />
+                              <Tooltip 
+                                 cursor={{ fill: '#10b98105' }}
+                                 contentStyle={{ 
+                                    backgroundColor: '#050505', 
+                                    border: '1px solid #10b98130',
+                                    borderRadius: '4px',
+                                    fontSize: '9px'
+                                 }}
+                              />
+                              <Bar dataKey="valuation" radius={[2, 2, 0, 0]}>
+                                 {assetDistributionData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#10b981' : '#22d3ee'} fillOpacity={0.6} />
+                                 ))}
+                              </Bar>
+                           </BarChart>
+                        </ResponsiveContainer>
+                     </div>
+                  </div>
+
+                  <div className="p-6 border border-emerald-500/10 bg-black/40 rounded-lg space-y-4">
+                     <h4 className="text-xs font-bold uppercase tracking-widest opacity-60">Registry Health</h4>
+                     <div className="space-y-4 pt-2">
+                        {[
+                           { label: 'Peering Load', val: 78, color: 'bg-emerald-500' },
+                           { label: 'Verification Velocity', val: 92, color: 'bg-cyan-500' },
+                           { label: 'Packet Integrity', val: 99, color: 'bg-emerald-400' },
+                           { label: 'MOF Compliance', val: 84, color: 'bg-amber-500' }
+                        ].map((item, i) => (
+                           <div key={i} className="space-y-1.5">
+                              <div className="flex justify-between text-[9px] uppercase font-black tracking-widest">
+                                 <span className="opacity-40">{item.label}</span>
+                                 <span className="text-emerald-100">{item.val}%</span>
+                              </div>
+                              <div className="h-1 bg-black/40 rounded-full overflow-hidden">
+                                 <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${item.val}%` }}
+                                    className={`h-full ${item.color} opacity-60`}
+                                 />
+                              </div>
+                           </div>
+                        ))}
+                     </div>
                   </div>
                </div>
             </div>
@@ -649,19 +1158,30 @@ export default function App() {
                     </div>
                     <div className="space-y-3">
                        {assets.filter(a => a.isListed).length > 0 ? (
-                         assets.filter(a => a.isListed).slice(0, 10).map((asset) => (
+                         assets.filter(a => a.isListed).slice(0, 10).map((asset, i) => (
                            <div 
                             key={asset.id} 
                             onClick={() => setSelectedAsset(asset)}
-                            className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded flex items-center justify-between group hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all cursor-pointer"
+                            className={`p-4 border rounded flex items-center justify-between group transition-all cursor-pointer ${
+                              isMonetized && i < 2 
+                              ? 'bg-cyan-500/10 border-cyan-500/40 shadow-[0_0_15px_rgba(34,211,238,0.1)] scale-[1.02] z-10' 
+                              : 'bg-emerald-500/5 border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30'
+                            }`}
                            >
                               <div className="flex items-center gap-4">
                                  <div className={`p-2 rounded ${Math.random() > 0.5 ? 'bg-emerald-400/10' : 'bg-rose-400/10'}`}>
                                     {Math.random() > 0.5 ? <ArrowUpRight className="w-4 h-4 text-emerald-400" /> : <ArrowDownRight className="w-4 h-4 text-rose-400" />}
                                  </div>
                                  <div>
-                                    <p className="text-xs font-bold text-emerald-200 uppercase tracking-wide">{asset.name}</p>
-                                    <p className="text-[9px] opacity-30 font-mono italic">{asset.id}</p>
+                                    <div className="flex items-center gap-2">
+                                       <p className="text-xs font-bold text-emerald-200 uppercase tracking-wide">{asset.name}</p>
+                                       {isMonetized && i < 2 && (
+                                          <span className="text-[7px] font-black italic bg-cyan-400 text-black px-1 rounded-sm tracking-tighter">SPONSORED</span>
+                                       )}
+                                    </div>
+                                    <p className="text-[9px] opacity-30 font-mono italic">
+                                       {isMonetized && i < 2 ? 'CORE_PARTNER // ' : ''}{asset.id}
+                                    </p>
                                  </div>
                               </div>
                               <div className="flex items-center gap-8">
@@ -966,6 +1486,22 @@ export default function App() {
 
                  {/* Valuation Sec */}
                  <section className="space-y-4">
+                   <section className="space-y-4">
+                      <span className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-500/30">Financial Performance</span>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded">
+                           <span className="text-[9px] uppercase opacity-40">Est. Annual Yield</span>
+                           <p className="text-sm font-black text-emerald-400">+{selectedAsset.yieldRate?.toFixed(2)}%</p>
+                        </div>
+                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded">
+                           <span className="text-[9px] uppercase opacity-40">Profit / Cycle</span>
+                           <p className="text-sm font-black text-cyan-400">
+                             {((selectedAsset.valuation * (selectedAsset.yieldRate || 0)) / 100 / 12).toFixed(2)} MTX
+                           </p>
+                        </div>
+                      </div>
+                   </section>
+
                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-500/30">Nodal Valuation</span>
                    <div className="p-6 bg-emerald-500/10 border border-emerald-500/30 rounded relative overflow-hidden group">
                       <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-3xl -mr-16 -mt-16 group-hover:bg-emerald-500/10 transition-colors" />

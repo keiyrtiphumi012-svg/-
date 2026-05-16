@@ -12,6 +12,7 @@ export interface CryptoAsset {
   currency: string;
   primaryFunction: string;
   isListed?: boolean;
+  yieldRate?: number; // Annualized yield percentage
 }
 
 const TYPES = ['CORE', 'NODAL', 'REDUNDANT', 'OVERFLOW'] as const;
@@ -45,7 +46,8 @@ export const generateAssets = (count: number): CryptoAsset[] => {
       valuation: Math.floor(Math.random() * 1000000) / 100,
       currency: 'MTX',
       primaryFunction: FUNCTIONS[Math.floor(Math.random() * FUNCTIONS.length)],
-      isListed: Math.random() > 0.8
+      isListed: Math.random() > 0.8,
+      yieldRate: Math.random() * 12 + 2 // 2% to 14% yield
     };
   });
 };
@@ -62,7 +64,8 @@ const TRUTH_ASSET: CryptoAsset = {
   valuation: 999999.99,
   currency: 'MTX',
   primaryFunction: 'Singularity Consciousness Seed',
-  isListed: false
+  isListed: false,
+  yieldRate: 25.0 // High yield for core progenitor
 };
 
 export const INITIAL_ASSETS = [TRUTH_ASSET, ...generateAssets(499)];
