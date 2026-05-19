@@ -1,6 +1,8 @@
 {
   "name": "Matrix Global Registry",
-  "description": "An immutable repository of cryptographic assets and digital nodes within the Matrix infrastructure. Features real-time scanning, asset tracking, and secured protocol verification.",
+  "description": "An immutable repository of cryptographic assets and digital nodes within the Matrix infrastructure. Features real-time scanning, asset tracking, secured protocol verification, and Google Drive cloud integrity storage.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

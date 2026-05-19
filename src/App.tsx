@@ -28,8 +28,13 @@ import {
   ArrowDownRight,
   Zap,
   Landmark,
-  BarChart as BarChartIcon
+  BarChart as BarChartIcon,
+  HardDrive,
+  FileText
 } from 'lucide-react';
+import { initAuth, googleSignIn, logout } from './lib/auth';
+import { User as FirebaseUser } from 'firebase/auth';
+import firebaseConfig from '../firebase-applet-config.json';
 import { 
   AreaChart, 
   Area, 
@@ -52,7 +57,12 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAsset, setSelectedAsset] = useState<CryptoAsset | null>(null);
   const [time, setTime] = useState(new Date().toLocaleTimeString());
-  const [currentView, setCurrentView] = useState<'LOG' | 'MANAGER' | 'PULSE' | 'SECURITY' | 'MARKET' | 'TREASURY' | 'BANK'>('LOG');
+  const [currentView, setCurrentView] = useState<'LOG' | 'MANAGER' | 'PULSE' | 'SECURITY' | 'MARKET' | 'TREASURY' | 'BANK' | 'DRIVE'>('LOG');
+  const [driveFiles, setDriveFiles] = useState<any[]>([]);
+  const [isDriveLoading, setIsDriveLoading] = useState(false);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [needsDriveAuth, setNeedsDriveAuth] = useState(false);
   const [assets, setAssets] = useState<CryptoAsset[]>(INITIAL_ASSETS);
   const [isRegistered, setIsRegistered] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
@@ -87,6 +97,59 @@ export default function App() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
+
+  useEffect(() => {
+    initAuth(
+      (user, token) => {
+        setUser(user);
+        setAccessToken(token);
+        setNeedsDriveAuth(false);
+      },
+      () => {
+        setNeedsDriveAuth(true);
+      }
+    );
+  }, []);
+
+  const fetchDriveFiles = async (token: string) => {
+    setIsDriveLoading(true);
+    try {
+      const response = await fetch(
+        'https://www.googleapis.com/drive/v3/files?pageSize=20&fields=files(id,name,mimeType,size,modifiedTime,webViewLink)',
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      const data = await response.json();
+      if (data.files) {
+        setDriveFiles(data.files);
+      }
+    } catch (error) {
+      console.error('Error fetching drive files:', error);
+    } finally {
+      setIsDriveLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentView === 'DRIVE' && accessToken) {
+      fetchDriveFiles(accessToken);
+    }
+  }, [currentView, accessToken]);
+
+  const handleDriveSignIn = async () => {
+    try {
+      const result = await googleSignIn();
+      if (result) {
+        setUser(result.user);
+        setAccessToken(result.accessToken);
+        setNeedsDriveAuth(false);
+        fetchDriveFiles(result.accessToken);
+      }
+    } catch (error) {
+      console.error('Drive sign-in error:', error);
+    }
+  };
 
   // Simulate loading sequence
   useEffect(() => {
@@ -451,6 +514,7 @@ export default function App() {
                 { id: 'MARKET' as const, icon: ShoppingCart, label: 'Marketplace' },
                 { id: 'TREASURY' as const, icon: ShieldCheck, label: 'Treasury' },
                 { id: 'BANK' as const, icon: Landmark, label: 'Matrix Bank' },
+                { id: 'DRIVE' as const, icon: HardDrive, label: 'Matrix Drive' },
                 { id: 'PULSE' as const, icon: Activity, label: 'Network Pulse' },
                 { id: 'SECURITY' as const, icon: Lock, label: 'Security Core' },
               ].map((item) => (
@@ -1895,6 +1959,170 @@ export default function App() {
                    <p>* All transactions are strictly monitored by the Ministry of Finance (MOF) for matrix stability.</p>
                 </div>
               </div>
+            </div>
+          ) : currentView === 'DRIVE' ? (
+            <div className="p-8 space-y-8 overflow-auto flex-1 bg-gradient-to-br from-emerald-950/10 to-transparent">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded shadow-[0_0_15px_rgba(59,130,246,0.1)]">
+                  <HardDrive className="w-6 h-6 text-blue-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold uppercase tracking-widest text-blue-300">Matrix Drive Storage</h2>
+                  <p className="text-[10px] opacity-40 uppercase">Secured Google Drive Integration & File Repository</p>
+                </div>
+                <div className="ml-auto">
+                   {user && (
+                     <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-lg">
+                       <div className="flex flex-col items-end">
+                         <span className="text-[10px] font-black text-blue-300 uppercase">{user.displayName || 'Matrix Agent'}</span>
+                         <span className="text-[8px] opacity-50 uppercase tracking-tighter">{user.email}</span>
+                       </div>
+                       <img src={user.photoURL || ''} alt="avatar" className="w-8 h-8 rounded-full border border-blue-400" referrerPolicy="no-referrer" />
+                       <button 
+                        onClick={() => { logout(); setUser(null); setAccessToken(null); setNeedsDriveAuth(true); }}
+                        className="text-[9px] font-black text-rose-400 hover:text-rose-300 uppercase border-l border-blue-500/20 ml-2 pl-3"
+                       >
+                         Disconnect
+                       </button>
+                     </div>
+                   )}
+                </div>
+              </div>
+
+              {needsDriveAuth ? (
+                <div className="h-[60vh] flex flex-col items-center justify-center space-y-6">
+                  <div className="p-8 border border-blue-500/20 bg-blue-950/10 rounded-2xl text-center max-w-md space-y-6 shadow-[0_0_50px_rgba(59,130,246,0.1)]">
+                    <div className="p-4 bg-blue-500/10 rounded-full inline-block">
+                       <Lock className="w-12 h-12 text-blue-400" />
+                    </div>
+                    <div className="space-y-2">
+                       <h3 className="text-lg font-black uppercase text-blue-300">Access Restricted</h3>
+                       <p className="text-[11px] text-blue-400/60 leading-relaxed font-sans uppercase">
+                         Connect your Matrix Identity with Google Drive to access encrypted nodal documentation and protocol files.
+                       </p>
+                    </div>
+                    
+                    <button 
+                      onClick={handleDriveSignIn}
+                      className="gsi-material-button w-full"
+                    >
+                      <div className="gsi-material-button-state"></div>
+                      <div className="gsi-material-button-content-wrapper">
+                        <div className="gsi-material-button-icon">
+                          <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" xmlns:xlink="http://www.w3.org/1999/xlink" style={{ display: 'block' }}>
+                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                            <path fill="none" d="M0 0h48v48H0z"></path>
+                          </svg>
+                        </div>
+                        <span className="gsi-material-button-contents">Sign in with Google</span>
+                        <span style={{ display: 'none' }}>Sign in with Google</span>
+                      </div>
+                    </button>
+                    <p className="text-[9px] text-blue-500/30 uppercase italic">
+                       * Handled via Firebase Auth Protocol 4.1
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                     <div className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-xl relative overflow-hidden group">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 opacity-60">Connected Account</span>
+                        <p className="text-xl font-black text-white mt-2 truncate">{user?.displayName || 'Authorized'}</p>
+                        <p className="text-[9px] opacity-40 uppercase tracking-tighter mt-1">{user?.email}</p>
+                     </div>
+                     <div className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-xl relative overflow-hidden group">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 opacity-60">Protocol Level</span>
+                        <p className="text-xl font-black text-white mt-2">METADATA_READ</p>
+                        <p className="text-[9px] opacity-40 uppercase tracking-tighter mt-1">Status: Verified</p>
+                     </div>
+                     <div className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-xl relative overflow-hidden group">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 opacity-60">Drive Buffer</span>
+                        <p className="text-xl font-black text-white mt-2">{isDriveLoading ? 'SCANNING...' : `${driveFiles.length} OBJECTS`}</p>
+                        <p className="text-[9px] opacity-40 uppercase tracking-tighter mt-1">Snapshot: 1.0s ago</p>
+                     </div>
+                     <div className="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-3 opacity-10">
+                           <ShieldCheck className="w-8 h-8 text-emerald-400" />
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 opacity-60">Security Token</span>
+                        <p className="text-xl font-black text-white mt-2">v3_DRIVE_OK</p>
+                        <p className="text-[9px] opacity-40 uppercase tracking-tighter mt-1">Source: AIS_CLOUD</p>
+                     </div>
+                  </div>
+
+                  <div className="border border-blue-500/10 rounded-xl overflow-hidden bg-black/40">
+                    <div className="px-6 py-4 border-b border-blue-500/10 flex items-center justify-between">
+                       <h3 className="text-xs font-black uppercase tracking-widest text-blue-300">Remote Data Buffer (v3 API)</h3>
+                       <button 
+                        onClick={() => accessToken && fetchDriveFiles(accessToken)}
+                        className="p-2 text-blue-400 hover:bg-blue-500/10 rounded transition-all"
+                       >
+                         <RefreshCw className={`w-4 h-4 ${isDriveLoading ? 'animate-spin' : ''}`} />
+                       </button>
+                    </div>
+                    
+                    <div className="p-2">
+                       {isDriveLoading ? (
+                         <div className="py-20 flex flex-col items-center justify-center gap-4 text-blue-500/40">
+                            <RefreshCw className="w-12 h-12 animate-spin opacity-20" />
+                            <p className="text-[10px] font-black uppercase tracking-widest">Accessing Google Cloud Infrastructure...</p>
+                         </div>
+                       ) : driveFiles.length > 0 ? (
+                         <table className="w-full text-left border-collapse">
+                           <thead>
+                             <tr className="bg-blue-500/5 border-b border-blue-500/10">
+                               <th className="px-6 py-4 text-[10px] uppercase tracking-widest opacity-40 font-bold text-blue-300">File Name</th>
+                               <th className="px-6 py-4 text-[10px] uppercase tracking-widest opacity-40 font-bold text-blue-300">MIME Type</th>
+                               <th className="px-6 py-4 text-[10px] uppercase tracking-widest opacity-40 font-bold text-blue-300">Modified</th>
+                               <th className="px-6 py-4 text-[10px] uppercase tracking-widest opacity-40 font-bold text-blue-300 text-right">Reference</th>
+                             </tr>
+                           </thead>
+                           <tbody className="divide-y divide-blue-500/5">
+                             {driveFiles.map((file) => (
+                               <tr key={file.id} className="hover:bg-blue-500/5 transition-colors group">
+                                 <td className="px-6 py-4">
+                                   <div className="flex items-center gap-3">
+                                      <FileText className="w-4 h-4 text-blue-400 opacity-60" />
+                                      <span className="text-[11px] font-bold text-blue-100 uppercase truncate max-w-[300px]">{file.name}</span>
+                                   </div>
+                                 </td>
+                                 <td className="px-6 py-4">
+                                   <span className="text-[9px] font-mono text-blue-500/60 truncate max-w-[150px] inline-block">{file.mimeType}</span>
+                                 </td>
+                                 <td className="px-6 py-4">
+                                   <span className="text-[9px] font-bold opacity-30 uppercase">{new Date(file.modifiedTime).toLocaleDateString()}</span>
+                                 </td>
+                                 <td className="px-6 py-4 text-right">
+                                   <a 
+                                    href={file.webViewLink} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="p-2 text-blue-500/40 hover:text-blue-400 hover:bg-blue-500/10 rounded-full transition-all inline-block"
+                                   >
+                                     <ExternalLink className="w-4 h-4" />
+                                   </a>
+                                 </td>
+                               </tr>
+                             ))}
+                           </tbody>
+                         </table>
+                       ) : (
+                         <div className="py-20 flex flex-col items-center justify-center gap-4 text-blue-500/40">
+                            <Info className="w-12 h-12 opacity-20" />
+                            <p className="text-[10px] font-black uppercase tracking-widest text-center">
+                              Buffer empty. No protocol files detected in root directory.<br/>
+                              <span className="opacity-50 mt-1 inline-block">MIME: application/vnd.google-apps.*</span>
+                            </p>
+                         </div>
+                       )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : currentView === 'PULSE' ? (
             <div className="p-8 flex-1 flex flex-col overflow-hidden">
