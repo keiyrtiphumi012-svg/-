@@ -84,6 +84,13 @@ export default function App() {
   const [selectedBank, setSelectedBank] = useState('SCB');
   const [shouldShake, setShouldShake] = useState(false);
   
+  // Mining & Income System State
+  const [miningPower, setMiningPower] = useState(0); // GH/s
+  const [activeMiningNodes, setActiveMiningNodes] = useState(0);
+  const [isMining, setIsMining] = useState(false);
+  const [miningYield, setMiningYield] = useState(0);
+  const [nodeUpgradeCost, setNodeUpgradeCost] = useState(0.5); // Initial cost in MTX
+  
   const stakeholders = useMemo(() => [
     { id: 'mof', name: 'Ministry of Finance (TH)', shares: 42.0, role: 'REGULATORY', status: 'VERIFIED' },
     { id: 'ais', name: 'AIS Network Infrastructure', shares: 28.5, role: 'PROVIDER', status: 'ACTIVE' },
@@ -146,7 +153,10 @@ export default function App() {
         setNeedsDriveAuth(false);
         fetchDriveFiles(result.accessToken);
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
+        return;
+      }
       console.error('Drive sign-in error:', error);
     }
   };
@@ -173,6 +183,40 @@ export default function App() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Mining Logic
+  useEffect(() => {
+    if (isMining && activeMiningNodes > 0) {
+      const interval = setInterval(() => {
+        // Mining Yield: base rate * power * nodes
+        const tickValue = (miningPower * activeMiningNodes * 0.0000001); 
+        setMiningYield(prev => prev + tickValue);
+        setLiveYield(prev => prev + tickValue);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isMining, miningPower, activeMiningNodes]);
+
+  const handleStartMining = () => {
+    if (activeMiningNodes === 0 && walletBalance >= nodeUpgradeCost) {
+      setWalletBalance(prev => prev - nodeUpgradeCost);
+      setActiveMiningNodes(1);
+      setMiningPower(15.5);
+      setIsMining(true);
+      setNodeUpgradeCost(prev => prev * 1.5);
+    } else if (activeMiningNodes > 0) {
+      setIsMining(!isMining);
+    }
+  };
+
+  const handleUpgradeMining = () => {
+    if (walletBalance >= nodeUpgradeCost) {
+      setWalletBalance(prev => prev - nodeUpgradeCost);
+      setActiveMiningNodes(prev => prev + 1);
+      setMiningPower(prev => prev + (Math.random() * 10 + 5));
+      setNodeUpgradeCost(prev => prev * 1.5);
+    }
+  };
 
   const filteredAssets = useMemo(() => {
     setCurrentPage(1); // Reset to first page on search
@@ -989,6 +1033,80 @@ export default function App() {
                         </div>
                         <div className="mt-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded text-[8px] uppercase leading-relaxed text-blue-400/60 font-bold italic">
                            * จัดสรรรายได้: ค่าธรรมเนียมบริหารจัดการ {commissionRate}% + ปันผลจากหุ้นส่วน {stakeholders.find(s => s.id === 'user')?.shares}% ของรายได้รวมทั้งหมด
+                        </div>
+                      </div>
+
+                      {/* Nodal Mining Control Center */}
+                      <div className="p-6 bg-blue-500/10 border border-blue-500/20 rounded-xl relative overflow-hidden group shadow-[0_0_20px_rgba(59,130,246,0.1)]">
+                        <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-40 transition-opacity">
+                           <Cpu className="w-8 h-8 text-blue-400" />
+                        </div>
+                        <p className="text-[10px] opacity-40 uppercase font-black tracking-widest mb-2">Nodal Mining Center</p>
+                        <div className="flex items-baseline gap-2 mb-4">
+                           <p className={`text-2xl font-black ${isMining ? 'text-blue-300' : 'text-white/40'}`}>
+                             {isMining ? miningPower.toFixed(1) : '0.0'}
+                           </p>
+                           <span className="text-[10px] font-bold text-blue-500/40 uppercase">GH/s Hashrate</span>
+                        </div>
+
+                        <div className="space-y-4">
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="flex flex-col gap-1 border-l border-blue-500/30 pl-3">
+                                 <span className="text-[8px] font-black uppercase text-blue-500/40 italic">Active Nodes</span>
+                                 <p className="text-sm font-black text-blue-400">{activeMiningNodes} Units</p>
+                              </div>
+                              <div className="flex flex-col gap-1 border-l border-cyan-500/30 pl-3">
+                                 <span className="text-[8px] font-black uppercase text-cyan-500/40 italic">Total Mined</span>
+                                 <p className="text-sm font-black text-cyan-400">{miningYield.toLocaleString(undefined, { minimumFractionDigits: 4 })} MTX</p>
+                              </div>
+                           </div>
+
+                           <div className="space-y-2">
+                             <div className="flex items-center justify-between">
+                                <span className="text-[9px] font-black uppercase text-blue-500/60">Node Efficiency</span>
+                                <span className="text-[9px] font-mono text-blue-400">{isMining ? 'OPERATIONAL' : 'STANDBY'}</span>
+                             </div>
+                             <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
+                                <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: isMining ? '85%' : '0%' }}
+                                  className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                                />
+                             </div>
+                           </div>
+
+                           <div className="flex gap-2">
+                              <button 
+                                onClick={handleStartMining}
+                                className={`flex-1 py-3 px-4 rounded-lg font-black text-[10px] tracking-[0.1em] uppercase transition-all flex items-center justify-center gap-2 ${
+                                   activeMiningNodes === 0 
+                                     ? (walletBalance >= nodeUpgradeCost ? 'bg-blue-500 text-white' : 'bg-white/5 text-white/20 cursor-not-allowed')
+                                     : (isMining ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30')
+                                }`}
+                              >
+                                {activeMiningNodes === 0 
+                                  ? (walletBalance >= nodeUpgradeCost ? `Deploy Node (${nodeUpgradeCost.toFixed(2)} MTX)` : 'Insufficient MTX')
+                                  : (isMining ? 'Stop Mining' : 'Start Mining')}
+                              </button>
+                              
+                              {activeMiningNodes > 0 && (
+                                <button 
+                                  onClick={handleUpgradeMining}
+                                  disabled={walletBalance < nodeUpgradeCost}
+                                  className={`flex-1 py-3 px-4 rounded-lg font-black text-[10px] tracking-[0.1em] uppercase transition-all flex items-center justify-center gap-2 ${
+                                    walletBalance >= nodeUpgradeCost 
+                                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-black' 
+                                      : 'bg-white/5 text-white/20 cursor-not-allowed grayscale'
+                                  }`}
+                                >
+                                  Upgrade ({nodeUpgradeCost.toFixed(2)} MTX)
+                                </button>
+                              )}
+                           </div>
+                        </div>
+
+                        <div className="mt-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded text-[8px] uppercase leading-relaxed text-blue-400/60 font-bold italic">
+                           * การขุด (Mining) จะช่วยเพิ่มรายได้สะสมในส่วนของ Your Personal Yield โดยตรงตามกำลังประมวลผล (Hashrate)
                         </div>
                       </div>
 
@@ -2009,7 +2127,7 @@ export default function App() {
                       <div className="gsi-material-button-state"></div>
                       <div className="gsi-material-button-content-wrapper">
                         <div className="gsi-material-button-icon">
-                          <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" xmlns:xlink="http://www.w3.org/1999/xlink" style={{ display: 'block' }}>
+                          <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" xmlnsXlink="http://www.w3.org/1999/xlink" style={{ display: 'block' }}>
                             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
                             <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
                             <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
