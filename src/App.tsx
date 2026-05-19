@@ -137,6 +137,7 @@ export default function App() {
 
   const lifetimeRevenue = useMemo(() => trendData.reduce((sum, d) => sum + d.revenue, 0), [trendData]);
   const MTX_TO_THB = 175.50; // Current Matrix Exchange Rate in THB
+  const MIN_WITHDRAWAL_THB = 1.0; // Minimum withdrawal limit in Thai Baht
   const adRevenue = isMonetized ? totalValuation * 0.00042 : 0;
   
   // User Earnings based on Lifetime Revenue
@@ -207,8 +208,9 @@ export default function App() {
   
   const handleBankTransfer = () => {
     const totalToTransfer = walletBalance + availableBalance;
+    const totalInTHB = totalToTransfer * MTX_TO_THB;
     
-    if (totalToTransfer >= 0.001 && bankAccountNumber.length >= 10 && !isTransferringToBank) {
+    if (totalInTHB >= MIN_WITHDRAWAL_THB && bankAccountNumber.length >= 10 && !isTransferringToBank) {
       setIsTransferringToBank(true);
       
       setTimeout(() => {
@@ -992,7 +994,7 @@ export default function App() {
                               onClick={handleBankTransfer}
                               disabled={isTransferringToBank}
                               className={`w-full py-5 px-6 rounded-xl font-black text-[12px] tracking-[0.2em] uppercase transition-all flex flex-col items-center justify-center gap-1 ${
-                                 (walletBalance + availableBalance >= 0.001) && bankAccountNumber.length >= 10 && !isTransferringToBank
+                                 ((walletBalance + availableBalance) * MTX_TO_THB >= MIN_WITHDRAWAL_THB) && bankAccountNumber.length >= 10 && !isTransferringToBank
                                  ? 'bg-emerald-500 text-black shadow-[0_0_30px_rgba(16,185,129,0.4)]' 
                                  : 'bg-white/5 text-white/20 border border-white/10'
                               }`}
@@ -1007,8 +1009,8 @@ export default function App() {
                                     <span>
                                        {bankAccountNumber.length < 10 
                                           ? 'กรอกเลขบัญชี 10 หลัก' 
-                                          : (walletBalance + availableBalance < 0.001)
-                                             ? 'MTX ไม่เพียงพอ (ขั้นต่ำ 0.001)'
+                                          : ((walletBalance + availableBalance) * MTX_TO_THB < MIN_WITHDRAWAL_THB)
+                                              ? `ยอดไม่ถึงขั้นต่ำ (${MIN_WITHDRAWAL_THB.toFixed(2)} บาท)`
                                              : `ยืนยันแลกเงินเข้า ${selectedBank}`}
                                     </span>
                                     <span className="text-[8px] font-bold opacity-60 italic normal-case">
@@ -1700,7 +1702,7 @@ export default function App() {
                   <div className="space-y-1">
                     <h4 className="text-[11px] font-black uppercase text-emerald-400">เงื่อนไขการโอนเงิน (Withdrawal Rule)</h4>
                     <p className="text-[10px] text-emerald-500/70 leading-relaxed font-sans mt-0.5">
-                       1. มียอดเหรียญขั้นต่ำรวมอย่างน้อย <span className="text-white font-black">0.001 MTX</span><br />
+                       1. ยอดโอนขั้นต่ำอย่างน้อย <span className="text-white font-black">{MIN_WITHDRAWAL_THB.toFixed(2)} บาท</span><br />
                        2. กรอกหมายเลขบัญชีธนาคารให้ครบ <span className="text-white font-black">10 หลัก</span><br />
                        3. ระบบจะโอนเงินเข้าบัญชี <span className="text-white font-black">{selectedBank}</span> ของคุณทันทีที่กดยืนยัน
                     </p>
@@ -1752,7 +1754,7 @@ export default function App() {
                       onClick={handleBankTransfer}
                       disabled={isTransferringToBank}
                       className={`w-full py-8 px-8 rounded-2xl font-black text-sm tracking-[0.3em] uppercase transition-all flex flex-col items-center justify-center gap-2 ${
-                        (walletBalance + availableBalance >= 0.001) && bankAccountNumber.length >= 10 && !isTransferringToBank
+                        ((walletBalance + availableBalance) * MTX_TO_THB >= MIN_WITHDRAWAL_THB) && bankAccountNumber.length >= 10 && !isTransferringToBank
                         ? 'bg-emerald-500 text-black shadow-[0_0_40px_rgba(16,185,129,0.5)] border-2 border-emerald-400' 
                         : 'bg-white/10 text-white/40 border border-white/20'
                       }`}
@@ -1770,12 +1772,12 @@ export default function App() {
                             <span>
                                {bankAccountNumber.length < 10 
                                   ? 'กรุณากรอกเลขบัญชี 10 หลัก' 
-                                  : (walletBalance + availableBalance < 0.001)
-                                     ? 'ยอดเงิน MTX ไม่เพียงพอ (ขั้นต่ำ 0.001)'
+                                  : ((walletBalance + availableBalance) * MTX_TO_THB < MIN_WITHDRAWAL_THB)
+                                     ? `ยอดเงินไม่ถึงขั้นต่ำ (${MIN_WITHDRAWAL_THB.toFixed(2)} บาท)`
                                      : `ยืนยันโอนเงินเข้าบัญชี ${selectedBank}`}
                             </span>
                           </div>
-                          {(walletBalance + availableBalance >= 0.001) && (
+                          {((walletBalance + availableBalance) * MTX_TO_THB >= MIN_WITHDRAWAL_THB) && (
                             <div className="flex flex-col items-center">
                               <span className="text-[11px] font-black text-black/60 bg-white/20 px-3 py-0.5 rounded-full mt-1">
                                  TOTAL PAYOUT: { ((walletBalance + availableBalance) * MTX_TO_THB).toLocaleString(undefined, { maximumFractionDigits: 0 }) } บาท (THB)
@@ -1840,7 +1842,7 @@ export default function App() {
                       onClick={handleBankTransfer}
                       disabled={isTransferringToBank}
                       className={`w-full py-6 px-8 rounded-2xl font-black text-xs tracking-[0.3em] uppercase transition-all flex flex-col items-center justify-center gap-2 ${
-                        (walletBalance + availableBalance >= 0.001) && bankAccountNumber.length >= 10 && !isTransferringToBank
+                        ((walletBalance + availableBalance) * MTX_TO_THB >= MIN_WITHDRAWAL_THB) && bankAccountNumber.length >= 10 && !isTransferringToBank
                         ? 'bg-emerald-500 text-black shadow-[0_0_30px_rgba(16,185,129,0.3)]' 
                         : 'bg-white/5 text-white/20 border border-white/10'
                       }`}
@@ -1858,12 +1860,12 @@ export default function App() {
                             <span>
                                {bankAccountNumber.length < 10 
                                   ? 'กรอกเลขบัญชี 10 หลัก' 
-                                  : (walletBalance + availableBalance < 0.1)
-                                     ? 'ยอด MTX ไม่เพียงพอ'
+                                  : ((walletBalance + availableBalance) * MTX_TO_THB < MIN_WITHDRAWAL_THB)
+                                     ? 'ยอดเงินไม่ถึงขั้นต่ำ'
                                      : `ยืนยันแลกเงินเข้า ${selectedBank}`}
                             </span>
                           </div>
-                          {(walletBalance + availableBalance >= 0.1) && (
+                          {((walletBalance + availableBalance) * MTX_TO_THB >= MIN_WITHDRAWAL_THB) && (
                             <span className="text-[9px] font-bold opacity-60 italic">
                                ESTIMATED PAYOUT: { ((walletBalance + availableBalance) * MTX_TO_THB).toLocaleString(undefined, { maximumFractionDigits: 0 }) } บาท
                             </span>
@@ -1873,7 +1875,7 @@ export default function App() {
                     </motion.button>
                     <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
                        <p className="text-[10px] text-emerald-500/60 leading-relaxed text-center font-bold">
-                          * ระบบรองรับการแลกขั้นต่ำ 0.001 MTX (ถอนเข้า {selectedBank} ทันที)<br/>
+                          * ระบบรองรับการแลกขั้นต่ำ {MIN_WITHDRAWAL_THB.toFixed(2)} บาท (ถอนเข้า {selectedBank} ทันที)<br/>
                           ตรวจสอบเลขบัญชีให้ถูกต้องก่อนยืนยัน
                        </p>
                     </div>
