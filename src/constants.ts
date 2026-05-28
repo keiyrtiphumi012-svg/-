@@ -34,20 +34,38 @@ const FUNCTIONS = [
 export const generateAssets = (count: number): CryptoAsset[] => {
   return Array.from({ length: count }, (_, i) => {
     const idNum = (i + 1).toString().padStart(4, '0');
+    // Deterministic selection based on index instead of Math.random
+    const type = TYPES[i % TYPES.length];
+    const status = STATUSES[i % STATUSES.length];
+    const owner = OWNERS[i % OWNERS.length];
+    
+    // Deterministic hash sequence
+    const hashVal = (i * 0x3a5e12).toString(16).padEnd(16, 'a').toUpperCase();
+    const hash = `0x${hashVal}E941A5C4A332F24E6B4A8DDF7FE6772C`;
+    
+    // Consistent verification dates spanning the last 150 days
+    const daysAgo = (i * 3) % 150;
+    const lastVerified = new Date(1779912000000 - (daysAgo * 86400000)).toISOString().split('T')[0];
+    
+    // Deterministic valuations
+    const valuation = 150.0 + ((i * 3217) % 8500);
+    const primaryFunction = FUNCTIONS[i % FUNCTIONS.length];
+    const isListed = i % 5 === 0; // Exactly 20% are listed
+    const yieldRate = 2.5 + ((i * 7) % 100) / 10; // Stable yields between 2.5% and 12.5%
+    
     return {
       id: `NODE_${idNum}`,
       name: `Asset_${idNum}_Protocol`,
-      type: TYPES[Math.floor(Math.random() * TYPES.length)],
-      status: STATUSES[Math.floor(Math.random() * STATUSES.length)],
-      owner: OWNERS[Math.floor(Math.random() * OWNERS.length)],
-      hash: Math.random().toString(16).substring(2, 10).toUpperCase() + 
-            Math.random().toString(16).substring(2, 10).toUpperCase(),
-      lastVerified: new Date(Date.now() - Math.floor(Math.random() * 1000000000)).toISOString().split('T')[0],
-      valuation: Math.floor(Math.random() * 1000000) / 100,
+      type,
+      status,
+      owner,
+      hash,
+      lastVerified,
+      valuation,
       currency: 'MTX',
-      primaryFunction: FUNCTIONS[Math.floor(Math.random() * FUNCTIONS.length)],
-      isListed: Math.random() > 0.8,
-      yieldRate: Math.random() * 12 + 2 // 2% to 14% yield
+      primaryFunction,
+      isListed,
+      yieldRate
     };
   });
 };

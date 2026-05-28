@@ -9,11 +9,33 @@ interface MarketTickerProps {
 }
 
 export const MarketTicker: React.FC<MarketTickerProps> = ({ assets }) => {
-  const tickerItems = assets.slice(0, 20).map(asset => ({
-    symbol: asset.id.substring(0, 4),
-    price: asset.valuation.toFixed(2),
-    change: (Math.random() * 5 * (Math.random() > 0.5 ? 1 : -1)).toFixed(2),
-  }));
+  const [tickerTime, setTickerTime] = React.useState(Date.now());
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setTickerTime(Date.now());
+    }, 1500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const tickerItems = assets.slice(0, 20).map((asset, index) => {
+    // Generate a pseudo-dynamic yet completely deterministic price fluctuation
+    const seed = index + 1;
+    // Sinusoidal wave between -4.5% and +4.5%
+    const changeVal = (Math.sin((tickerTime / 15000) + seed) * 4.5);
+    const change = changeVal.toFixed(2);
+    
+    // Add slightly fluctuating price based on the change multiplier
+    const rawPrice = asset.valuation;
+    const priceFluc = rawPrice + (rawPrice * (changeVal / 100));
+    const price = priceFluc.toFixed(2);
+
+    return {
+      symbol: asset.id.substring(0, 4) + "_" + seed,
+      price,
+      change,
+    };
+  });
 
   return (
     <div className="bg-emerald-950/40 border-b border-emerald-500/20 py-1.5 overflow-hidden whitespace-nowrap flex items-center">

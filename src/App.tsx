@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShieldCheck, 
   Terminal, 
+  Scale, 
   Database, 
   Cpu, 
   Activity, 
@@ -61,7 +62,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAsset, setSelectedAsset] = useState<CryptoAsset | null>(null);
   const [time, setTime] = useState(new Date().toLocaleTimeString());
-  const [currentView, setCurrentView] = useState<'LOG' | 'MANAGER' | 'PULSE' | 'SECURITY' | 'MARKET' | 'TREASURY' | 'BANK' | 'DRIVE'>('LOG');
+  const [currentView, setCurrentView] = useState<'LOG' | 'MANAGER' | 'PULSE' | 'SECURITY' | 'MARKET' | 'TREASURY' | 'BANK' | 'DRIVE' | 'EQUILIBRIUM'>('LOG');
   const [driveFiles, setDriveFiles] = useState<any[]>([]);
   const [isDriveLoading, setIsDriveLoading] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -88,6 +89,12 @@ export default function App() {
   const [selectedBank, setSelectedBank] = useState('SCB');
   const [shouldShake, setShouldShake] = useState(false);
   
+  // Real Payments & Payouts Server States
+  const [serverTransactions, setServerTransactions] = useState<any[]>([]);
+  const [stripeStatus, setStripeStatus] = useState({ stripeConfigured: false, mode: 'SANDBOX' });
+  const [depositAmount, setDepositAmount] = useState('10');
+  const [isDepositing, setIsDepositing] = useState(false);
+  
   // Mining & Income System State
   const [miningPower, setMiningPower] = useState(0); // GH/s
   const [activeMiningNodes, setActiveMiningNodes] = useState(0);
@@ -95,25 +102,18 @@ export default function App() {
   const [miningYield, setMiningYield] = useState(0);
   const [nodeUpgradeCost, setNodeUpgradeCost] = useState(0.5); // Initial cost in MTX
   
-  // Visitor Analyzer & Real-time Traffic State
-  const [totalViews, setTotalViews] = useState<number>(() => {
-    const saved = localStorage.getItem('matrix_total_views');
-    const base = saved ? parseInt(saved, 10) : Math.floor(Math.random() * 210) + 1890;
-    const incremented = base + 1;
-    localStorage.setItem('matrix_total_views', incremented.toString());
-    return incremented;
-  });
-
-  const [uniqueVisitors, setUniqueVisitors] = useState<number>(() => {
-    const saved = localStorage.getItem('matrix_unique_users');
-    const base = saved ? parseInt(saved, 10) : Math.floor(Math.random() * 45) + 360;
-    const isNew = !saved || Math.random() > 0.85;
-    const finalVal = isNew ? base + 1 : base;
-    localStorage.setItem('matrix_unique_users', finalVal.toString());
-    return finalVal;
-  });
-
-  const [activeTrafficCount, setActiveTrafficCount] = useState<number>(() => Math.floor(Math.random() * 8) + 15);
+  // Keiyrtiphumi Matrix 40/20 Equilibrium States
+  const [eqCore, setEqCore] = useState<number>(0);
+  const [eqPillars, setEqPillars] = useState<number>(12); // slightly unbalanced
+  const [eqNetwork, setEqNetwork] = useState<number>(35); // slightly unbalanced
+  const [eqRing, setEqRing] = useState<number>(118); // slightly unbalanced
+  const [isEquilibriumSolved, setIsEquilibriumSolved] = useState<boolean>(false);
+  const [isSolvingEq, setIsSolvingEq] = useState<boolean>(false);
+  
+  // Visitor Analyzer & Real-time Traffic State (Updated dynamically from server)
+  const [totalViews, setTotalViews] = useState<number>(2026);
+  const [uniqueVisitors, setUniqueVisitors] = useState<number>(1);
+  const [activeTrafficCount, setActiveTrafficCount] = useState<number>(1);
   
   const [visitorSessions, setVisitorSessions] = useState<Array<{
     id: string;
@@ -124,16 +124,7 @@ export default function App() {
     latency: number;
     status: 'ACTIVE' | 'IDLE' | 'ACTION';
     timestamp: string;
-  }>>([
-    { id: 'node_0x8f2a', ip: '182.52.203.11', location: 'Bangkok, TH', activeView: 'Asset Log', device: 'Desktop (macOS)', latency: 45, status: 'ACTIVE', timestamp: 'Just now' },
-    { id: 'node_0xac31', ip: '223.24.18.99', location: 'Chiang Mai, TH', activeView: 'Node Manager', device: 'Mobile (iOS)', latency: 82, status: 'ACTION', timestamp: '1m ago' },
-    { id: 'node_0x992b', ip: '46.12.215.143', location: 'Frankfurt, DE', activeView: 'Registry Core', device: 'Desktop (Linux)', latency: 180, status: 'IDLE', timestamp: '3m ago' },
-    { id: 'node_0x1102', ip: '110.164.252.1', location: 'Chonburi, TH', activeView: 'Matrix Bank', device: 'Desktop (Windows)', latency: 50, status: 'ACTIVE', timestamp: '4m ago' },
-    { id: 'node_0x7b5e', ip: '128.8.21.43', location: 'California, US', activeView: 'Treasury', device: 'Desktop (macOS)', latency: 195, status: 'IDLE', timestamp: '5m ago' },
-    { id: 'node_0xf9e2', ip: '54.254.12.80', location: 'Singapore, SG', activeView: 'Matrix Drive', device: 'Server Node', latency: 28, status: 'ACTIVE', timestamp: '7m ago' },
-    { id: 'node_0xee8e', ip: '210.1.201.55', location: 'Tokyo, JP', activeView: 'Network Pulse', device: 'Mobile (Android)', latency: 98, status: 'ACTION', timestamp: '8m ago' },
-    { id: 'node_0xd41c', ip: '124.122.95.141', location: 'Khon Kaen, TH', activeView: 'Marketplace', device: 'Mobile (iOS)', latency: 68, status: 'ACTIVE', timestamp: '12m ago' }
-  ]);
+  }>>([]);
   
   const stakeholders = useMemo(() => [
     { id: 'mof', name: 'Ministry of Finance (TH)', shares: 42.0, role: 'REGULATORY', status: 'VERIFIED' },
@@ -161,6 +152,166 @@ export default function App() {
       }
     );
   }, []);
+
+  // Update perfect equilibrium solved status
+  useEffect(() => {
+    const vectorSum = (eqCore - 0) + (eqPillars - 10) + (eqNetwork - 40) + (eqRing - 120);
+    setIsEquilibriumSolved(vectorSum === 0);
+  }, [eqCore, eqPillars, eqNetwork, eqRing]);
+
+  // Fetch initial profile stats & transaction logs on load or sign-in
+  const fetchUserStats = async (email: string) => {
+    try {
+      const res = await fetch(`/api/users/sync?email=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      if (data.stats) {
+        setWalletBalance(data.stats.walletBalance);
+        setBankBalance(data.stats.bankBalance);
+        if (data.stats.miningPower !== undefined) setMiningPower(data.stats.miningPower);
+        if (data.stats.activeMiningNodes !== undefined) setActiveMiningNodes(data.stats.activeMiningNodes);
+        if (data.stats.isMining !== undefined) setIsMining(data.stats.isMining);
+        if (data.stats.miningYield !== undefined) setMiningYield(data.stats.miningYield);
+        if (data.stats.nodeUpgradeCost !== undefined) setNodeUpgradeCost(data.stats.nodeUpgradeCost);
+      }
+      if (data.transactions) {
+        setServerTransactions(data.transactions);
+      }
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.email) {
+      fetchUserStats(user.email);
+    }
+  }, [user?.email]);
+
+  const [anonymousId] = useState(() => {
+    let id = localStorage.getItem('matrix_anon_id');
+    if (!id) {
+       id = 'anon_' + Math.random().toString(36).substring(2, 8);
+       localStorage.setItem('matrix_anon_id', id);
+    }
+    return id;
+  });
+
+  const stateRef = useRef({
+    user,
+    walletBalance,
+    bankBalance,
+    miningPower,
+    activeMiningNodes,
+    isMining,
+    miningYield,
+    nodeUpgradeCost,
+    currentView
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      user,
+      walletBalance,
+      bankBalance,
+      miningPower,
+      activeMiningNodes,
+      isMining,
+      miningYield,
+      nodeUpgradeCost,
+      currentView
+    };
+  }, [
+    user,
+    walletBalance,
+    bankBalance,
+    miningPower,
+    activeMiningNodes,
+    isMining,
+    miningYield,
+    nodeUpgradeCost,
+    currentView
+  ]);
+
+  // Unified persistent background synchronization agent
+  useEffect(() => {
+    const performSync = async () => {
+      const current = stateRef.current;
+      try {
+        const res = await fetch('/api/users/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: current.user?.email || null,
+            anonymousId,
+            walletBalance: current.walletBalance,
+            bankBalance: current.bankBalance,
+            miningPower: current.miningPower,
+            activeMiningNodes: current.activeMiningNodes,
+            isMining: current.isMining,
+            miningYield: current.miningYield,
+            nodeUpgradeCost: current.nodeUpgradeCost,
+            activeView: current.currentView,
+            status: 'ACTIVE'
+          })
+        });
+        const data = await res.json();
+        if (data && data.success && data.global) {
+          setTotalViews(data.global.totalViews);
+          setUniqueVisitors(data.global.uniqueVisitors);
+          setActiveTrafficCount(data.global.activeTrafficCount);
+          setVisitorSessions(data.global.visitorSessions);
+        }
+      } catch (err) {
+        console.error("Portal cloud synchronization failed:", err);
+      }
+    };
+
+    performSync();
+
+    const timer = setInterval(performSync, 4000);
+    return () => clearInterval(timer);
+  }, [anonymousId]);
+
+  // Handle successful payments return URL and clean query string
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentSuccess = params.get('payment_success');
+    const sessionId = params.get('session_id');
+    const mtx = params.get('mtx');
+    
+    if (paymentSuccess === 'true' && sessionId && mtx && user?.email) {
+      const verifyCheckout = async () => {
+        try {
+          const res = await fetch('/api/payments/complete-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId,
+              email: user.email,
+              mtxAmount: mtx
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            setWalletBalance(data.walletBalance);
+            fetchUserStats(user.email);
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        } catch (error) {
+          console.error("Verification of purchase failed:", error);
+        }
+      };
+      verifyCheckout();
+    }
+    
+    // Check Stripe capability status
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => {
+        setStripeStatus({ stripeConfigured: data.stripeConfigured, mode: data.mode });
+      })
+      .catch(() => {});
+  }, [user?.email]);
 
   const fetchDriveFiles = async (token: string) => {
     setIsDriveLoading(true);
@@ -241,60 +392,7 @@ export default function App() {
     }
   }, [isMining, miningPower, activeMiningNodes]);
 
-  // Real-time Visitor Dynamic Simulator Effect
-  useEffect(() => {
-    const timer = setInterval(() => {
-      // 1. Randomly update active traffic count slightly (maintain boundaries between 14 and 35)
-      setActiveTrafficCount(prev => {
-        const delta = Math.random() > 0.5 ? 1 : -1;
-        const newCount = prev + delta;
-        return newCount < 12 ? 12 : newCount > 35 ? 35 : newCount;
-      });
 
-      // 2. 30% chance to increment totalViews slightly to represent live page views
-      if (Math.random() > 0.7) {
-        setTotalViews(prev => {
-          const newViews = prev + 1;
-          localStorage.setItem('matrix_total_views', newViews.toString());
-          return newViews;
-        });
-      }
-
-      // 3. Randomly update one of the concurrent simulated visitor sessions
-      setVisitorSessions(prev => {
-        return prev.map((session, idx) => {
-          // Choose one session to change randomly each tick
-          const shouldChange = Math.floor(Math.random() * prev.length) === idx;
-          if (shouldChange) {
-            const statuses: Array<'ACTIVE' | 'IDLE' | 'ACTION'> = ['ACTIVE', 'IDLE', 'ACTION'];
-            const views = [
-              'Asset Log', 'Node Manager', 'Marketplace', 'Treasury', 
-              'Matrix Bank', 'Matrix Drive', 'Network Pulse', 'Security Core'
-            ];
-            const nextStatus = statuses[Math.floor(Math.random() * statuses.length)];
-            const nextView = views[Math.floor(Math.random() * views.length)];
-            const nextLatency = Math.max(15, Math.min(250, session.latency + Math.floor(Math.random() * 21) - 10));
-            
-            return {
-              ...session,
-              status: nextStatus,
-              activeView: nextView,
-              latency: nextLatency,
-              timestamp: 'Just now'
-            };
-          } else {
-            // Update other timestamps dynamically
-            return {
-              ...session,
-              timestamp: session.timestamp === 'Just now' ? '1m ago' : session.timestamp
-            };
-          }
-        });
-      });
-    }, 4000);
-
-    return () => clearInterval(timer);
-  }, []);
 
   const handleStartMining = () => {
     if (activeMiningNodes === 0 && walletBalance >= nodeUpgradeCost) {
@@ -312,7 +410,7 @@ export default function App() {
     if (walletBalance >= nodeUpgradeCost) {
       setWalletBalance(prev => prev - nodeUpgradeCost);
       setActiveMiningNodes(prev => prev + 1);
-      setMiningPower(prev => prev + (Math.random() * 10 + 5));
+      setMiningPower(prev => prev + 10.0); // Predictable, realistic +10 GH/s upgrade per unit
       setNodeUpgradeCost(prev => prev * 1.5);
     }
   };
@@ -330,13 +428,14 @@ export default function App() {
   
   const trendData = useMemo(() => {
     const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-    let baseVal = totalValuation * 0.8;
-    return months.map((month) => {
-      baseVal += (Math.random() - 0.35) * (totalValuation * 0.06);
+    return months.map((month, idx) => {
+      // Deterministic multiplier based on progressive indices (replicating realistic trajectory)
+      const multiplier = 0.8 + (idx * 0.02) + (Math.sin(idx * 0.9) * 0.04);
+      const val = totalValuation * multiplier;
       return {
         name: month,
-        valuation: Math.floor(baseVal),
-        revenue: Math.floor(baseVal * 0.00042)
+        valuation: Math.floor(val),
+        revenue: Math.floor(val * 0.00042)
       };
     });
   }, [totalValuation]);
@@ -412,30 +511,106 @@ export default function App() {
     }
   };
   
-  const handleBankTransfer = () => {
+  const handleBankTransfer = async () => {
     const totalToTransfer = walletBalance + availableBalance;
     const totalInTHB = totalToTransfer * MTX_TO_THB;
     
     if (totalInTHB >= MIN_WITHDRAWAL_THB && bankAccountNumber.length >= 10 && !isTransferringToBank) {
       setIsTransferringToBank(true);
       
-      setTimeout(() => {
-        const fromAvailable = availableBalance;
-        const totalToBank = walletBalance + availableBalance;
-        
-        setWalletBalance(0);
-        setWithdrawnAmount(prev => prev + fromAvailable);
-        setBankBalance(prev => prev + (totalToBank * MTX_TO_THB));
-        setIsTransferringToBank(false);
-        setShowBankTransferSuccess(true);
-        setTimeout(() => setShowBankTransferSuccess(false), 4000);
-      }, 2500);
+      if (user?.email) {
+        try {
+          const response = await fetch('/api/withdraw', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: user.email,
+              amountMTX: totalToTransfer,
+              amountTHB: totalInTHB,
+              bank: selectedBank,
+              accountNumber: bankAccountNumber
+            })
+          });
+          const data = await response.json();
+          if (data.success) {
+            const fromAvailable = availableBalance;
+            setWalletBalance(0);
+            setWithdrawnAmount(prev => prev + fromAvailable);
+            setBankBalance(data.bankBalance);
+            setIsTransferringToBank(false);
+            setShowBankTransferSuccess(true);
+            setTimeout(() => setShowBankTransferSuccess(false), 4000);
+            fetchUserStats(user.email);
+          } else {
+            alert(data.error || "Settle transaction failed");
+            setIsTransferringToBank(false);
+          }
+        } catch (error) {
+          console.error("Payout error:", error);
+          setIsTransferringToBank(false);
+        }
+      } else {
+        // Fallback for guest mode simulation
+        setTimeout(() => {
+          const fromAvailable = availableBalance;
+          const totalToBank = walletBalance + availableBalance;
+          
+          setWalletBalance(0);
+          setWithdrawnAmount(prev => prev + fromAvailable);
+          setBankBalance(prev => prev + (totalToBank * MTX_TO_THB));
+          setIsTransferringToBank(false);
+          setShowBankTransferSuccess(true);
+          setTimeout(() => setShowBankTransferSuccess(false), 4000);
+        }, 2500);
+      }
     } else if (!isTransferringToBank) {
       setShouldShake(true);
       if (window.navigator.vibrate) {
         window.navigator.vibrate([100, 50, 100]);
       }
       setTimeout(() => setShouldShake(false), 500);
+    }
+  };
+
+  const handleStripeDeposit = async () => {
+    if (!user?.email) {
+      alert("Please Sign In with Google before purchasing MTX tokens.");
+      return;
+    }
+    const amountVal = Number(depositAmount);
+    if (isNaN(amountVal) || amountVal <= 0) {
+      alert("Please enter a valid amount.");
+      return;
+    }
+
+    setIsDepositing(true);
+    try {
+      const thbAmount = amountVal * MTX_TO_THB;
+      const response = await fetch('/api/payments/create-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          mtxAmount: amountVal,
+          thbAmount: thbAmount
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        if (data.mode === 'LIVE' && data.url) {
+          window.location.href = data.url;
+        } else {
+          setWalletBalance(data.walletBalance);
+          fetchUserStats(user.email);
+          alert(`[SANDBOX DEPOSIT SUCCESSFUL] Successfully bought ${amountVal} MTX with test transaction.`);
+        }
+      } else {
+        alert(data.error || "Payment session initialization failed.");
+      }
+    } catch (error) {
+      console.error("Deposit error:", error);
+    } finally {
+      setIsDepositing(false);
     }
   };
 
@@ -660,6 +835,7 @@ export default function App() {
                 { id: 'DRIVE' as const, icon: HardDrive, label: 'ไดรฟ์ข้อมูล (Matrix Drive)' },
                 { id: 'PULSE' as const, icon: Activity, label: 'วิเคราะห์ทราฟฟิก (Network Pulse)' },
                 { id: 'SECURITY' as const, icon: Lock, label: 'แกนความปลอดภัย (Security)' },
+                { id: 'EQUILIBRIUM' as const, icon: Scale, label: 'สมดุลเมทริกซ์ 40/20' },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -974,7 +1150,7 @@ export default function App() {
                      <div className="absolute inset-0 opacity-5 pointer-events-none">
                         <div className="grid grid-cols-10 gap-1 h-full">
                            {Array.from({ length: 10 }).map((_, i) => (
-                             <div key={i} className="bg-emerald-500 w-full" style={{ height: `${Math.random() * 100}%` }} />
+                             <div key={i} className="bg-emerald-500 w-full" style={{ height: `${((i * 13) % 90) + 10}%` }} />
                            ))}
                         </div>
                      </div>
@@ -1718,7 +1894,7 @@ export default function App() {
                      </div>
                      <div className="h-12 flex items-end gap-1">
                         {Array.from({ length: 30 }).map((_, i) => (
-                           <div key={i} className="flex-1 bg-emerald-500/20" style={{ height: `${Math.random() * 60 + 20}%` }} />
+                           <div key={i} className="flex-1 bg-emerald-500/20" style={{ height: `${20 + ((i * 13) % 7) * 10}%` }} />
                         ))}
                      </div>
                   </div>
@@ -1732,7 +1908,7 @@ export default function App() {
                         </div>
                         <div>
                            <p className="text-sm font-bold text-white uppercase">{INITIAL_ASSETS[0].name}</p>
-                           <p className="text-[10px] opacity-40 uppercase">+{ (Math.random() * 15 + 5).toFixed(2) }%</p>
+                           <p className="text-[10px] opacity-40 uppercase">+15.26%</p>
                         </div>
                      </div>
                      <div className="text-[10px] font-bold text-cyan-400 px-3 py-1 bg-cyan-500/5 border border-cyan-500/20 rounded w-fit uppercase">
@@ -1775,8 +1951,8 @@ export default function App() {
                             }`}
                            >
                               <div className="flex items-center gap-4">
-                                 <div className={`p-2 rounded ${Math.random() > 0.5 ? 'bg-emerald-400/10' : 'bg-rose-400/10'}`}>
-                                    {Math.random() > 0.5 ? <ArrowUpRight className="w-4 h-4 text-emerald-400" /> : <ArrowDownRight className="w-4 h-4 text-rose-400" />}
+                                 <div className={`p-2 rounded ${(asset.valuation % 2 === 0) ? 'bg-emerald-400/10' : 'bg-rose-400/10'}`}>
+                                    {(asset.valuation % 2 === 0) ? <ArrowUpRight className="w-4 h-4 text-emerald-400" /> : <ArrowDownRight className="w-4 h-4 text-rose-400" />}
                                  </div>
                                  <div>
                                     <div className="flex items-center gap-2">
@@ -1797,8 +1973,8 @@ export default function App() {
                                  </div>
                                  <div className="text-right w-24">
                                     <p className="text-xs font-black text-emerald-100">{asset.valuation.toLocaleString()} MTX</p>
-                                    <p className={`text-[9px] font-bold uppercase ${Math.random() > 0.5 ? 'text-emerald-500/40' : 'text-rose-500/40'}`}>
-                                       {Math.random() > 0.5 ? '+2.41' : '-1.12'}%
+                                    <p className={`text-[9px] font-bold uppercase ${(asset.valuation % 2 === 0) ? 'text-emerald-500/40' : 'text-rose-500/40'}`}>
+                                       {(asset.valuation % 2 === 0) ? `+${((asset.yieldRate * 13) % 4 + 1.25).toFixed(2)}` : `-${((asset.yieldRate * 13) % 4 + 1.25).toFixed(2)}`}%
                                     </p>
                                  </div>
                                   <button 
@@ -1880,7 +2056,7 @@ export default function App() {
                             <div key={i} className="flex justify-between items-center text-[10px]">
                                <span className="opacity-40 uppercase truncate max-w-[100px]">{INITIAL_ASSETS[i+10].name}</span>
                                <span className="font-mono text-emerald-500/60">SOLD</span>
-                               <span className="font-bold text-emerald-100">{(Math.random() * 1000).toFixed(2)} MTX</span>
+                               <span className="font-bold text-emerald-100">{(INITIAL_ASSETS[i+10].valuation * 0.9).toFixed(2)} MTX</span>
                             </div>
                           ))}
                        </div>
@@ -1966,153 +2142,110 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Bank Selection & Transfer */}
-              <div className="p-8 border border-emerald-500/10 bg-black/40 rounded-xl space-y-8">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <h3 className="text-sm font-black uppercase tracking-[0.3em] opacity-40">Select Settlement Destination</h3>
-                  <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5">
-                    <span className="text-[9px] font-bold text-emerald-400 opacity-60 uppercase">System: Local Gateway (Thailand)</span>
-                  </div>
-                </div>
-
-                {/* Withdrawal Info Box */}
-                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl flex items-start gap-3">
-                  <div className="p-2 bg-emerald-500/20 rounded-lg">
-                    <Info className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="text-[11px] font-black uppercase text-emerald-400">เงื่อนไขการโอนเงิน (Withdrawal Rule)</h4>
-                    <p className="text-[10px] text-emerald-500/70 leading-relaxed font-sans mt-0.5">
-                       1. ยอดโอนขั้นต่ำอย่างน้อย <span className="text-white font-black">{MIN_WITHDRAWAL_THB.toFixed(2)} บาท</span><br />
-                       2. กรอกหมายเลขบัญชีธนาคารให้ครบ <span className="text-white font-black">10 หลัก</span><br />
-                       3. ระบบจะโอนเงินเข้าบัญชี <span className="text-white font-black">{selectedBank}</span> ของคุณทันทีที่กดยืนยัน
-                    </p>
-                  </div>
-                </div>
-
-                {/* Account Number Input */}
-                <div className="space-y-3 bg-emerald-500/5 p-4 rounded-lg border border-emerald-500/10">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-emerald-400 block flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Enter Bank Account Number (กรอกเลขบัญชี 10 หลัก)
-                  </label>
-                  <div className="relative">
-                    <input 
-                      type="text"
-                      inputMode="numeric"
-                      value={bankAccountNumber}
-                      onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))}
-                      placeholder="000-0-00000-0"
-                      className="w-full bg-black/80 border border-emerald-500/30 rounded-lg py-5 px-6 text-2xl font-mono text-emerald-300 placeholder:text-emerald-500/5 focus:outline-none focus:border-emerald-500 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)] transition-all font-black tracking-[0.2em]"
-                      maxLength={15}
-                    />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                       {bankAccountNumber.length >= 10 ? (
-                         <div className="flex items-center gap-1 text-[10px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-2 py-1 rounded">
-                            <ShieldCheck className="w-4 h-4" /> Ready
-                         </div>
-                       ) : (
-                         <button 
-                            onClick={() => setBankAccountNumber('1234567890')}
-                            className="flex items-center gap-1 text-[10px] font-black text-white bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded uppercase transition-colors"
-                         >
-                            <RefreshCw className="w-4 h-4" /> Quick Fill
-                         </button>
-                       )}
+              {/* Two-Column Settle & Buy Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                {/* COLUMN 1: Settlement & Bank Withdrawal (จ่ายเงินออก) */}
+                <div className="p-8 border border-emerald-500/10 bg-black/40 rounded-xl space-y-6 flex flex-col justify-between">
+                  <div className="space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <h3 className="text-xs font-black uppercase tracking-[0.3em] opacity-80 text-emerald-400">1. Settlement / Bank Transfer (ถอนเงินออกจริง)</h3>
+                      <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5">
+                        <span className="text-[9px] font-bold text-emerald-400 opacity-60 uppercase">Gateway: BOT Thai Bank</span>
+                      </div>
                     </div>
-                  </div>
-                  <p className="text-[9px] font-bold text-white/30 uppercase italic font-sans">
-                    * บัญชีนี้ต้องเป็นชื่อของคุณเท่านั้น (This must be your own account)
-                  </p>
-                </div>
 
-                <div className="space-y-4">
-                    <motion.button 
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.98 }}
-                      animate={shouldShake ? { x: [-10, 10, -10, 10, 0] } : {}}
-                      transition={{ duration: 0.4 }}
-                      onClick={handleBankTransfer}
-                      disabled={isTransferringToBank}
-                      className={`w-full py-8 px-8 rounded-2xl font-black text-sm tracking-[0.3em] uppercase transition-all flex flex-col items-center justify-center gap-2 ${
-                        ((walletBalance + availableBalance) * MTX_TO_THB >= MIN_WITHDRAWAL_THB) && bankAccountNumber.length >= 10 && !isTransferringToBank
-                        ? 'bg-emerald-500 text-black shadow-[0_0_40px_rgba(16,185,129,0.5)] border-2 border-emerald-400' 
-                        : 'bg-white/10 text-white/40 border border-white/20'
-                      }`}
-                    >
-                      {isTransferringToBank ? (
-                        <>
-                          <div className="w-6 h-6 border-4 border-black border-t-transparent rounded-full animate-spin mb-1" />
-                          <span className="animate-pulse">SETTLING WITH {selectedBank}...</span>
-                          <span className="text-[9px] font-bold opacity-60">BOT-GATEWAY: PROCESSING TRANSACTION</span>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-3">
-                            <Landmark className="w-5 h-5" />
-                            <span>
-                               {bankAccountNumber.length < 10 
-                                  ? 'กรุณากรอกเลขบัญชี 10 หลัก' 
-                                  : ((walletBalance + availableBalance) * MTX_TO_THB < MIN_WITHDRAWAL_THB)
-                                     ? `ยอดเงินไม่ถึงขั้นต่ำ (${MIN_WITHDRAWAL_THB.toFixed(2)} บาท)`
-                                     : `ยืนยันโอนเงินเข้าบัญชี ${selectedBank}`}
-                            </span>
+                    {/* Withdrawal Info Box */}
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl flex items-start gap-3">
+                      <div className="p-2 bg-emerald-500/20 rounded-lg">
+                        <Info className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-[11px] font-black uppercase text-emerald-400">เงื่อนไขการโอนเงิน (Withdrawal Rule)</h4>
+                        <p className="text-[10px] text-emerald-500/70 leading-relaxed font-sans mt-0.5">
+                           1. ยอดโอนขั้นต่ำอย่างน้อย <span className="text-white font-black">{MIN_WITHDRAWAL_THB.toFixed(2)} บาท</span><br />
+                           2. กรอกหมายเลขบัญชีธนาคารให้ครบ <span className="text-white font-black">10 หลัก</span><br />
+                           3. ระบบจะโอนเงินเข้าบัญชี <span className="text-white font-black">{selectedBank}</span> ของคุณโดยตรง
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Account Number Input */}
+                    <div className="space-y-3 bg-emerald-500/5 p-4 rounded-lg border border-emerald-500/10">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-emerald-400 block flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Enter Bank Account Number (กรอกเลขบัญชี 10 หลัก)
+                      </label>
+                      <div className="relative">
+                        <input 
+                          type="text"
+                          inputMode="numeric"
+                          value={bankAccountNumber}
+                          onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))}
+                          placeholder="000-0-00000-0"
+                          className="w-full bg-black/80 border border-emerald-500/30 rounded-lg py-4 px-5 text-xl font-mono text-emerald-300 placeholder:text-emerald-500/5 focus:outline-none focus:border-emerald-500 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)] transition-all font-black tracking-[0.2em]"
+                          maxLength={15}
+                        />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                           {bankAccountNumber.length >= 10 ? (
+                             <div className="flex items-center gap-1 text-[10px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-2 py-1 rounded">
+                                <ShieldCheck className="w-4 h-4" /> Ready
+                             </div>
+                           ) : (
+                             <button 
+                                onClick={() => setBankAccountNumber('1234567890')}
+                                className="flex items-center gap-1 text-[10px] font-black text-white bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded uppercase transition-colors"
+                             >
+                                <RefreshCw className="w-4 h-4" /> Quick Fill
+                             </button>
+                           )}
+                        </div>
+                      </div>
+                      <p className="text-[9px] font-bold text-white/30 uppercase italic font-sans">
+                        * บัญชีนี้ต้องเป็นชื่อของคุณเท่านั้น (This must be your own account)
+                      </p>
+                    </div>
+
+                    {/* Bank Selector */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { id: 'SCB', name: 'Siam Commercial', color: 'border-purple-500/30 text-purple-400 bg-purple-500/5', active: 'bg-purple-500/20 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]' },
+                        { id: 'KBANK', name: 'Kasikorn Bank', color: 'border-emerald-600/30 text-emerald-500 bg-emerald-600/5', active: 'bg-emerald-600/20 border-emerald-600 shadow-[0_0_15px_rgba(22,163,74,0.3)]' },
+                        { id: 'BBL', name: 'Bangkok Bank', color: 'border-blue-700/30 text-blue-600 bg-blue-700/5', active: 'bg-blue-700/20 border-blue-700 shadow-[0_0_15px_rgba(29,78,216,0.3)]' },
+                        { id: 'KRUNGTHAI', name: 'Krungthai Bank', color: 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5', active: 'bg-cyan-500/20 border-cyan-500 shadow-[0_0_15px_rgba(34,211,238,0.3)]' }
+                      ].map(bank => (
+                        <button
+                          key={bank.id}
+                          onClick={() => setSelectedBank(bank.id)}
+                          className={`relative p-3 rounded-xl border flex items-center gap-3 transition-all group ${
+                            selectedBank === bank.id 
+                            ? bank.active
+                            : 'bg-white/5 border-white/10 hover:border-white/20 grayscale opacity-60 hover:grayscale-0 hover:opacity-100'
+                          }`}
+                        >
+                          <Landmark className="w-5 h-5" />
+                          <div className="text-left">
+                            <p className="text-[10px] font-black uppercase tracking-widest">{bank.id}</p>
+                            <p className="text-[7px] font-bold opacity-40 uppercase truncate max-w-[100px]">{bank.name}</p>
                           </div>
-                          {((walletBalance + availableBalance) * MTX_TO_THB >= MIN_WITHDRAWAL_THB) && (
-                            <div className="flex flex-col items-center">
-                              <span className="text-[11px] font-black text-black/60 bg-white/20 px-3 py-0.5 rounded-full mt-1">
-                                 TOTAL PAYOUT: { ((walletBalance + availableBalance) * MTX_TO_THB).toLocaleString(undefined, { maximumFractionDigits: 0 }) } บาท (THB)
-                              </span>
-                              <span className="text-[9px] font-bold opacity-50 mt-1 italic">Real-time BOT Exchange Rate applied</span>
+                          {selectedBank === bank.id && (
+                            <div className="absolute top-1 right-1.5">
+                               <ShieldCheck className="w-2.5 h-2.5" />
                             </div>
                           )}
-                        </>
-                      )}
-                    </motion.button>
-                </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  {[
-                    { id: 'SCB', name: 'Siam Commercial', color: 'border-purple-500/30 text-purple-400 bg-purple-500/5', active: 'bg-purple-500/20 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]' },
-                    { id: 'KBANK', name: 'Kasikorn Bank', color: 'border-emerald-600/30 text-emerald-500 bg-emerald-600/5', active: 'bg-emerald-600/20 border-emerald-600 shadow-[0_0_15px_rgba(22,163,74,0.3)]' },
-                    { id: 'BBL', name: 'Bangkok Bank', color: 'border-blue-700/30 text-blue-600 bg-blue-700/5', active: 'bg-blue-700/20 border-blue-700 shadow-[0_0_15px_rgba(29,78,216,0.3)]' },
-                    { id: 'KRUNGTHAI', name: 'Krungthai Bank', color: 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5', active: 'bg-cyan-500/20 border-cyan-500 shadow-[0_0_15px_rgba(34,211,238,0.3)]' }
-                  ].map(bank => (
-                    <button
-                      key={bank.id}
-                      onClick={() => setSelectedBank(bank.id)}
-                      className={`relative h-24 p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all group ${
-                        selectedBank === bank.id 
-                        ? bank.active
-                        : 'bg-white/5 border-white/10 hover:border-white/20 grayscale opacity-60 hover:grayscale-0 hover:opacity-100'
-                      }`}
-                    >
-                      <Landmark className="w-6 h-6" />
-                      <div className="text-center">
-                        <p className="text-[11px] font-black uppercase tracking-widest">{bank.id}</p>
-                        <p className="text-[8px] font-bold opacity-40 uppercase truncate w-full px-2">{bank.name}</p>
-                      </div>
-                      {selectedBank === bank.id && (
-                        <div className="absolute top-2 right-2">
-                           <ShieldCheck className="w-3 h-3" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="pt-8 border-t border-emerald-500/10">
-                  <div className="max-w-xl mx-auto space-y-6">
-                    <div className="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-lg text-center space-y-2">
-                      <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Exchange Rate Verification</p>
-                      <div className="flex items-center justify-center gap-4 text-2xl font-black">
+                  <div className="pt-6 border-t border-emerald-500/10 space-y-4">
+                    <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-lg text-center">
+                      <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest">Exchange Rate Integration</p>
+                      <div className="flex items-center justify-center gap-3 text-lg font-black mt-1">
                         <span className="text-blue-400">1 MTX</span>
                         <span className="text-emerald-500 opacity-20">{'='}</span>
                         <span className="text-emerald-500">{MTX_TO_THB} THB</span>
                       </div>
-                      <p className="text-[9px] font-medium opacity-40 uppercase italic tracking-tighter">
-                        * Provided by Bank of Thailand (BOT) API Gateway V2.1
-                      </p>
                     </div>
 
                     <motion.button 
@@ -2122,7 +2255,7 @@ export default function App() {
                       transition={{ duration: 0.4 }}
                       onClick={handleBankTransfer}
                       disabled={isTransferringToBank}
-                      className={`w-full py-6 px-8 rounded-2xl font-black text-xs tracking-[0.3em] uppercase transition-all flex flex-col items-center justify-center gap-2 ${
+                      className={`w-full py-5 px-6 rounded-xl font-black text-xs tracking-[0.3em] uppercase transition-all flex flex-col items-center justify-center gap-1.5 ${
                         ((walletBalance + availableBalance) * MTX_TO_THB >= MIN_WITHDRAWAL_THB) && bankAccountNumber.length >= 10 && !isTransferringToBank
                         ? 'bg-emerald-500 text-black shadow-[0_0_30px_rgba(16,185,129,0.3)]' 
                         : 'bg-white/5 text-white/20 border border-white/10'
@@ -2130,14 +2263,13 @@ export default function App() {
                     >
                       {isTransferringToBank ? (
                         <>
-                          <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin mb-1" />
-                          <span className="animate-pulse">SETTLING WITH {selectedBank}...</span>
-                          <span className="text-[8px] font-bold opacity-60">BOT-GATEWAY: ESTABLISHING SECURE CONNECTION</span>
+                          <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mb-0.5" />
+                          <span className="animate-pulse text-[10px]">VERIFYING WITH {selectedBank}...</span>
                         </>
                       ) : (
                         <>
-                          <div className="flex items-center gap-3">
-                            <RefreshCw className="w-4 h-4" />
+                          <div className="flex items-center gap-2">
+                            <Landmark className="w-4 h-4" />
                             <span>
                                {bankAccountNumber.length < 10 
                                   ? 'กรอกเลขบัญชี 10 หลัก' 
@@ -2147,20 +2279,213 @@ export default function App() {
                             </span>
                           </div>
                           {((walletBalance + availableBalance) * MTX_TO_THB >= MIN_WITHDRAWAL_THB) && (
-                            <span className="text-[9px] font-bold opacity-60 italic">
-                               ESTIMATED PAYOUT: { ((walletBalance + availableBalance) * MTX_TO_THB).toLocaleString(undefined, { maximumFractionDigits: 0 }) } บาท
+                            <span className="text-[8px] font-bold opacity-60 italic normal-case">
+                               ESTIMATED PAYOUT: { ((walletBalance + availableBalance) * MTX_TO_THB).toLocaleString(undefined, { maximumFractionDigits: 0 }) } บาท (THB)
                             </span>
                           )}
                         </>
                       )}
                     </motion.button>
-                    <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
-                       <p className="text-[10px] text-emerald-500/60 leading-relaxed text-center font-bold">
-                          * ระบบรองรับการแลกขั้นต่ำ {MIN_WITHDRAWAL_THB.toFixed(2)} บาท (ถอนเข้า {selectedBank} ทันที)<br/>
-                          ตรวจสอบเลขบัญชีให้ถูกต้องก่อนยืนยัน
-                       </p>
+                  </div>
+                </div>
+
+                {/* COLUMN 2: Stripe Deposit (ชำระเงินเข้า / ซื้อ MTX) */}
+                <div className="p-8 border border-blue-500/10 bg-black/40 rounded-xl space-y-6 flex flex-col justify-between">
+                  <div className="space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <h3 className="text-xs font-black uppercase tracking-[0.3em] opacity-80 text-blue-400">2. Real Stripe Payment (ชำระเงินซื้อเหรียญ)</h3>
+                      <div className="flex items-center gap-2 px-2.5 py-0.5 bg-blue-500/10 rounded-full border border-blue-500/20">
+                        <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">
+                          {stripeStatus.stripeConfigured ? 'LIVE GATEWAY' : 'SANDBOX MODE'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Deposit Instructions Box */}
+                    <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl flex items-start gap-3">
+                      <div className="p-2 bg-blue-500/20 rounded-lg">
+                        <ShoppingCart className="w-4 h-4 text-blue-400" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-[11px] font-black uppercase text-blue-300">ซื้อกระแสไฟและทรัพยากรระบบ (Buy MTX)</h4>
+                        <p className="text-[10px] text-blue-400/70 leading-relaxed font-sans mt-0.5">
+                           ซื้อโทเค็น <span className="text-white font-bold">MTX</span> ดั้งเดิมเพื่อนำไปใช้อัปเกรด Deploy Mining Nodes ขยายกำลังการทวีคูณผลตอบแทนรายชั่วโมงได้อย่างง่ายดาย
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Purchase Amount Selection list */}
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-blue-400 block flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                        Select MTX Token Quantity (เลือกจำนวนที่ต้องการซื้อ)
+                      </label>
+                      
+                      <div className="grid grid-cols-4 gap-2">
+                        {['5', '10', '50', '100'].map((amt) => (
+                          <button
+                            key={amt}
+                            onClick={() => setDepositAmount(amt)}
+                            className={`p-3 rounded-lg border font-mono font-black text-center text-xs transition-all ${
+                              depositAmount === amt
+                              ? 'bg-blue-500/20 border-blue-500 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                              : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'
+                            }`}
+                          >
+                            {amt} MTX
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Custom Input */}
+                      <div className="relative mt-2">
+                        <input
+                          type="number"
+                          value={depositAmount}
+                          onChange={(e) => setDepositAmount(e.target.value)}
+                          placeholder="Or enter custom amount..."
+                          className="w-full bg-black/80 border border-blue-500/30 rounded-lg py-3 px-4 text-sm font-mono text-blue-300 focus:outline-none focus:border-blue-500 transition-all font-bold placeholder:text-blue-500/10"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-blue-500/50 uppercase">Matrix Code</span>
+                      </div>
                     </div>
                   </div>
+
+                  <div className="pt-6 border-t border-blue-500/10 space-y-4">
+                    <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-lg text-center">
+                      <p className="text-[9px] font-bold text-blue-400 uppercase tracking-widest">Pricing Verification (THB / Cents)</p>
+                      <div className="flex items-center justify-center gap-1.5 text-lg font-black mt-1">
+                        <span className="text-white">{(Number(depositAmount) || 0).toLocaleString()} MTX</span>
+                        <span className="text-blue-500 opacity-20">{'≈'}</span>
+                        <span className="text-blue-400">{((Number(depositAmount) || 0) * MTX_TO_THB).toLocaleString(undefined, { maximumFractionDigits: 1 })} THB</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleStripeDeposit}
+                      disabled={isDepositing || !user}
+                      className={`w-full py-5 px-6 rounded-xl font-black text-xs tracking-[0.3em] uppercase transition-all flex flex-col items-center justify-center gap-1.5 ${
+                        user && !isDepositing
+                        ? 'bg-blue-500 text-white shadow-[0_0_30px_rgba(59,130,246,0.3)]'
+                        : 'bg-white/5 text-white/20 border border-white/10 cursor-not-allowed'
+                      }`}
+                    >
+                      {isDepositing ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mb-0.5" />
+                          <span className="animate-pulse">REDIRECTING TO SECURE STRIPE GATEWAY...</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <ShoppingCart className="w-4 h-4" />
+                            <span>{user ? `ชำระเงินจริง THB (Stripe)` : `Sign-in required to Buy`}</span>
+                          </div>
+                          {user && (
+                            <span className="text-[8px] font-bold opacity-60 italic normal-case">
+                              Fulfill Checkout Protocol ({((Number(depositAmount) || 0) * MTX_TO_THB).toLocaleString(undefined, { maximumFractionDigits: 0 })} บาท)
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* SECTION: Persistent Transaction History (ประวัติตุรกรรมเครือข่าย) */}
+              <div className="p-8 border border-emerald-500/10 bg-black/40 rounded-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                     <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                     <h4 className="text-xs font-black uppercase tracking-widest text-emerald-100">Secure Database Transaction Ledger (บันทึกรายธุรกรรมจริง)</h4>
+                  </div>
+                  <span className="text-[8px] font-mono font-bold text-emerald-500/40 uppercase bg-emerald-500/5 border border-emerald-500/10 px-2 py-1 rounded">
+                     Real-time sync active
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto min-h-[140px] max-h-[300px] overflow-y-auto border border-emerald-500/5 rounded-lg">
+                  {serverTransactions && serverTransactions.length > 0 ? (
+                    <table className="w-full text-left font-mono text-[10px]">
+                      <thead>
+                        <tr className="bg-emerald-500/5 text-emerald-400/50 uppercase border-b border-emerald-500/10 font-bold">
+                          <th className="py-3 px-4">TRANSACTION_ID</th>
+                          <th className="py-3 px-4">METHOD</th>
+                          <th className="py-3 px-4">TYPE</th>
+                          <th className="py-3 px-4 animate-pulse">SETTLED VALUE</th>
+                          <th className="py-3 px-4">GATEWAY</th>
+                          <th className="py-3 px-4">STATUS</th>
+                          <th className="py-3 px-4 text-right">TIMESTAMP (UTC)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-emerald-500/5">
+                        {serverTransactions.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-emerald-500/5 text-slate-300 transition-colors">
+                            <td className="py-3 px-4 font-bold text-white leading-none">
+                              {tx.id}
+                              {tx.stripeSessionId && (
+                                <span className="block text-[7px] text-blue-400 mt-1 uppercase font-black tracking-widest">
+                                  Stripe Callback Linked
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 uppercase font-bold text-emerald-400/80">
+                              {tx.type}
+                            </td>
+                            <td className="py-3 px-4 max-w-[200px] truncate uppercase font-bold opacity-75">
+                              {tx.type === 'WITHDRAWAL' ? tx.bank : 'Stripe Visa/Mastercard'}
+                              {tx.accountNumber && (
+                                <span className="block text-[8px] opacity-40 font-mono mt-0.5 font-bold">
+                                  {tx.accountNumber.slice(0,3)}-X-X-{tx.accountNumber.slice(-3)}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 font-black text-white">
+                              {tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {tx.currency}
+                              <span className="block text-[8px] text-emerald-500 font-bold opacity-60 mt-0.5">
+                                {tx.type === 'DEPOSIT' 
+                                  ? `+ ${(tx.amount / MTX_TO_THB).toFixed(2)} MTX` 
+                                  : `- ${(tx.amount / MTX_TO_THB).toFixed(2)} MTX`
+                                }
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                tx.isReal 
+                                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
+                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              }`}>
+                                {tx.isReal ? 'STRIPE' : 'LOCAL_SANDBOX'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`flex items-center gap-1.5 font-black uppercase text-[9px] ${
+                                tx.status === 'COMPLETED' ? 'text-emerald-400 drop-shadow-[0_0_5px_#10b981]' :
+                                tx.status === 'PENDING' ? 'text-amber-400 animate-pulse' : 'text-rose-400'
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                  tx.status === 'COMPLETED' ? 'bg-emerald-500' :
+                                  tx.status === 'PENDING' ? 'bg-amber-500 animate-ping' : 'bg-rose-500'
+                                }`} />
+                                {tx.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right text-slate-500 font-bold">
+                              {new Date(tx.timestamp).toLocaleString('en-US', { hour12: false })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="py-12 flex flex-col items-center justify-center text-emerald-500/20 gap-2">
+                      <AlertCircle className="w-8 h-8 opacity-25" />
+                      <p className="text-[10px] uppercase font-bold tracking-widest">No matching database ledger entries</p>
+                      <p className="text-[8px] opacity-50 uppercase tracking-tighter">Sign-in and complete checkout or bank withdrawals to register logs</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2172,7 +2497,7 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-[9px] uppercase font-bold tracking-tight text-emerald-500/60 leading-relaxed italic">
                    <p>* Your earnings are subject to Director commission rates and shareholder distribution protocols.</p>
                    <p>* All bank transfers are verified against the current Matrix-THB exchange purity index.</p>
-                   <p>* Settled funds will appear in your official THB bank ledger within 1.5 seconds (Matrix Time).</p>
+                   <p>* Webhooks are established with global card operators to complete checkout validations instantly.</p>
                    <p>* All transactions are strictly monitored by the Ministry of Finance (MOF) for matrix stability.</p>
                 </div>
               </div>
@@ -2546,6 +2871,288 @@ export default function App() {
                 
               </div>
             </div>
+          ) : currentView === 'EQUILIBRIUM' ? (
+            <div id="equilibrium-screen" className="p-8 space-y-8 flex-1 overflow-auto bg-gradient-to-br from-amber-950/10 via-black to-emerald-950/10">
+               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b border-amber-500/10 pb-6">
+                 <div className="flex items-center gap-4">
+                   <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded shadow-[0_0_20px_rgba(245,158,11,0.15)] animate-pulse">
+                     <Scale className="w-6 h-6 text-amber-500" />
+                   </div>
+                   <div>
+                     <h2 id="equilibrium-title" className="text-xl font-black uppercase tracking-widest text-amber-400">ระบบสมดุลเมทริกซ์ 40/20 (Matrix 40/20 Equilibrium Controller)</h2>
+                     <p className="text-[10px] opacity-60 uppercase tracking-wider text-emerald-400">ทฤษฎีสมดุลโครงสร้างเมทริกซ์สัญจร 4 ระดับ โดย Keiyrtiphumi (Vector Sum Zero Regulator)</p>
+                   </div>
+                 </div>
+                 <div className="flex items-center gap-3">
+                   {isEquilibriumSolved ? (
+                     <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-amber-500/20 border border-amber-500/50 text-[10px] text-amber-300 font-black uppercase tracking-widest shadow-[0_0_25px_rgba(245,158,11,0.3)]">
+                       <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                       สมดุลสมบูรณ์แบบ (VECTOR SUM ZERO)
+                     </span>
+                   ) : (
+                     <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-rose-500/10 border border-rose-500/20 text-[10px] text-rose-400 font-bold uppercase tracking-wider">
+                       <span className="w-2 h-2 rounded-full bg-rose-500" />
+                       ระบบไม่เสถียร (UNBALANCED DRIFT)
+                     </span>
+                   )}
+                 </div>
+               </div>
+
+               {/* Universal Law Formula Display Card */}
+               <div id="equilibrium-summary-card" className="p-6 border border-amber-500/20 bg-amber-950/5 rounded-xl space-y-4 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+                  <div className="flex items-center justify-between">
+                     <h3 className="text-xs font-bold uppercase tracking-widest text-amber-200">กฎเวกเตอร์ผลรวมสมบูรณ์สากล (Universal Balance Formula)</h3>
+                     <span className="text-[8px] font-mono px-2 py-0.5 rounded border border-amber-500/20 text-amber-400 bg-amber-500/5">DNA REF: v4lgx_matrix_eq</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 pt-2">
+                     <div className="p-4 bg-black/40 border border-emerald-500/10 rounded-lg text-center">
+                        <p className="text-[9px] font-black uppercase opacity-40">ชั้นที่ 1: CORE (แกนนิ่ง)</p>
+                        <p className="text-2xl font-black text-emerald-400 mt-1">0</p>
+                        <p className="text-[8px] opacity-45 uppercase mt-1">The Critical Singularity</p>
+                     </div>
+                     <div className="p-4 bg-black/40 border border-emerald-500/10 rounded-lg text-center">
+                        <p className="text-[9px] font-black uppercase opacity-40">ชั้นที่ 2: PILLARS (เสาโครงหลัก)</p>
+                        <p className="text-2xl font-black text-amber-400 mt-1">10</p>
+                        <p className="text-[8px] opacity-45 uppercase mt-1">Directional Force</p>
+                     </div>
+                     <div className="p-4 bg-black/40 border border-emerald-500/10 rounded-lg text-center">
+                        <p className="text-[9px] font-black uppercase opacity-40">ชั้นที่ 3: NETWORK (ทางผ่านเครือข่าย)</p>
+                        <p className="text-2xl font-black text-cyan-400 mt-1">40</p>
+                        <p className="text-[8px] opacity-45 uppercase mt-1">Flow & Connectivity</p>
+                     </div>
+                     <div className="p-4 bg-black/40 border border-emerald-500/10 rounded-lg text-center">
+                        <p className="text-[9px] font-black uppercase opacity-40">ชั้นที่ 4: RING (วงกรอบควบคุม)</p>
+                        <p className="text-2xl font-black text-purple-400 mt-1">120</p>
+                        <p className="text-[8px] opacity-45 uppercase mt-1">Boundary Constraint</p>
+                     </div>
+                  </div>
+
+                  <div className="bg-black/80 border border-amber-500/25 p-4 rounded-lg font-mono text-center flex flex-col justify-center items-center gap-2">
+                     <div className="text-[12px] text-amber-300 font-bold uppercase tracking-wider">
+                        สูตรคํานวณหาความต่างเวกเตอร์สิทธิ์:
+                     </div>
+                     <div className="text-sm md:text-lg font-black text-white py-1 text-center font-mono">
+                        Vector Sum = (Actual_Core - 0) + (Actual_Pillars - 10) + (Actual_Network - 40) + (Actual_Ring - 120)
+                     </div>
+                     <div className="text-xs text-emerald-400">
+                        สถานะความเสถียรต้องเท่ากับ <span className="underline font-black font-mono">0</span> เท่านั้น ถึงจะเรียกขานเป็นระบบสมดุลสมบูรณ์แบบ
+                     </div>
+                  </div>
+               </div>
+
+               {/* Interactive Tuning Panel */}
+               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  
+                  {/* Left Column: Calibration Deck */}
+                  <div className="lg:col-span-7 p-6 border border-emerald-500/10 bg-black/40 rounded-xl space-y-6">
+                     <div className="flex items-center justify-between border-b border-emerald-500/10 pb-4">
+                        <div className="flex items-center gap-2">
+                           <Cpu className="w-4 h-4 text-emerald-400" />
+                           <h4 className="text-xs font-bold uppercase tracking-widest text-emerald-100">แผงควบคุมระดับเวกเตอร์ปรับตามจริง (Manual Vector Deck)</h4>
+                        </div>
+                        <button
+                           id="eq-solve-btn"
+                           onClick={() => {
+                              if (isSolvingEq) return;
+                              setIsSolvingEq(true);
+                              let step = 0;
+                              const interval = setInterval(() => {
+                                 if (step === 0) {
+                                    setEqCore(0);
+                                 } else if (step === 1) {
+                                    setEqPillars(10);
+                                 } else if (step === 2) {
+                                    setEqNetwork(40);
+                                 } else if (step === 3) {
+                                    setEqRing(120);
+                                    setIsSolvingEq(false);
+                                    clearInterval(interval);
+                                 }
+                                 step++;
+                              }, 350);
+                           }}
+                           disabled={isSolvingEq}
+                           className="px-3 py-1 bg-amber-500 text-black text-[9px] font-black uppercase rounded hover:bg-amber-400 transition-all shadow-[0_0_15px_rgba(245,158,11,0.25)] flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                           {isSolvingEq ? (
+                              <>
+                                 <RefreshCw className="w-3 h-3 animate-spin" />
+                                 กําลังประมวลผล...
+                              </>
+                           ) : (
+                              <>
+                                 <Zap className="w-3 h-3" />
+                                 ปรับระบบอัตโนมัติ (AUTO-STABILIZE)
+                              </>
+                           )}
+                        </button>
+                     </div>
+
+                     <div className="space-y-6">
+                        {/* Table 1 Slider */}
+                        <div className="space-y-2">
+                           <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-emerald-300">ชั้นที่ 1: CORE STABILIZER</span>
+                              <span className="font-mono bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded">จริง: {eqCore} / ควรเป็น: 0</span>
+                           </div>
+                           <input 
+                              id="eq-slider-core"
+                              type="range"
+                              min="-20"
+                              max="20"
+                              step="1"
+                              value={eqCore}
+                              onChange={(e) => setEqCore(parseInt(e.target.value, 10))}
+                              className="w-full accent-emerald-400 bg-neutral-800"
+                           />
+                           <p className="text-[8px] opacity-40 uppercase">ตัวแปรความสั่นพ้อง ณ จุดเอกฐาน Singularity กึ่งกลางศูนย์ถ่วงของโครงข่าย</p>
+                        </div>
+
+                        {/* Table 2 Slider */}
+                        <div className="space-y-2">
+                           <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-amber-300">ชั้นที่ 2: PILLARS STRUCTURAL CALIBRATOR</span>
+                              <span className="font-mono bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded">จริง: {eqPillars} / ควรเป็น: 10</span>
+                           </div>
+                           <input 
+                              id="eq-slider-pillars"
+                              type="range"
+                              min="0"
+                              max="30"
+                              step="1"
+                              value={eqPillars}
+                              onChange={(e) => setEqPillars(parseInt(e.target.value, 10))}
+                              className="w-full accent-amber-400 bg-neutral-800"
+                           />
+                           <p className="text-[8px] opacity-40 uppercase">ตัวค้ำรับโครงสร้างเสาแนวตั้ง ควบคุมอัตราแรงอัดประจุประสารภายใน</p>
+                        </div>
+
+                        {/* Table 3 Slider */}
+                        <div className="space-y-2">
+                           <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-cyan-300">ชั้นที่ 3: NETWORK ROUTE CONNECTIVITY</span>
+                              <span className="font-mono bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded">จริง: {eqNetwork} / ควรเป็น: 40</span>
+                           </div>
+                           <input 
+                              id="eq-slider-network"
+                              type="range"
+                              min="20"
+                              max="60"
+                              step="1"
+                              value={eqNetwork}
+                              onChange={(e) => setEqNetwork(parseInt(e.target.value, 10))}
+                              className="w-full accent-cyan-400 bg-neutral-800"
+                           />
+                           <p className="text-[8px] opacity-40 uppercase">ขนาดความหนาแน่นผู้ใช้งานโหนดและทราฟฟิกข้อมูลที่สตรีมมายังระบบ</p>
+                        </div>
+
+                        {/* Table 4 Slider */}
+                        <div className="space-y-2">
+                           <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-purple-300">ชั้นที่ 4: LIMITING CONTAINER RING</span>
+                              <span className="font-mono bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">จริง: {eqRing} / ควรเป็น: 120</span>
+                           </div>
+                           <input 
+                              id="eq-slider-ring"
+                              type="range"
+                              min="80"
+                              max="160"
+                              step="1"
+                              value={eqRing}
+                              onChange={(e) => setEqRing(parseInt(e.target.value, 10))}
+                              className="w-full accent-purple-400 bg-neutral-800"
+                           />
+                           <p className="text-[8px] opacity-40 uppercase font-sans">ขอบเขตวงแหวนกักรังสี กรัพปริมณฑล และผนังความปลอดภัยของชั้นที่ปิดกั้น</p>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Right Column: Calculations Console & Yield Status */}
+                  <div className="lg:col-span-5 flex flex-col gap-6">
+                     
+                     {/* Calculator Terminal */}
+                     <div className="p-6 border border-amber-500/10 bg-black/80 rounded-xl space-y-4 flex-1 flex flex-col justify-between">
+                        <div>
+                           <div className="flex items-center gap-2 mb-4 border-b border-emerald-500/10 pb-3">
+                              <Terminal className="w-4 h-4 text-amber-500" />
+                              <span className="text-[10px] font-black uppercase tracking-widest text-amber-200">ประมวลผลสมดุลแบบเรียบร้อย (Math Solver Engine)</span>
+                           </div>
+
+                           <div className="space-y-3 font-mono text-[11px] leading-relaxed">
+                              <div className="flex justify-between text-emerald-400">
+                                 <span>CORE OFFSET:</span>
+                                 <span>({eqCore} - 0) = {eqCore - 0}</span>
+                              </div>
+                              <div className="flex justify-between text-amber-400">
+                                 <span>PILLARS OFFSET:</span>
+                                 <span>({eqPillars} - 10) = {eqPillars - 10}</span>
+                              </div>
+                              <div className="flex justify-between text-cyan-400">
+                                 <span>NETWORK OFFSET:</span>
+                                 <span>({eqNetwork} - 40) = {eqNetwork - 40}</span>
+                              </div>
+                              <div className="flex justify-between text-purple-400">
+                                 <span>RING OFFSET:</span>
+                                 <span>({eqRing} - 120) = {eqRing - 120}</span>
+                              </div>
+                              
+                              <div className="border-t border-dashed border-amber-500/20 pt-3 flex justify-between font-black text-white bg-amber-500/5 px-2 py-1.5 rounded text-xs">
+                                 <span>VECTOR SUM TOTAL:</span>
+                                 <span className={((eqCore - 0) + (eqPillars - 10) + (eqNetwork - 40) + (eqRing - 120) === 0) ? 'text-amber-400 animate-pulse' : 'text-rose-400'}>
+                                    {(eqCore - 0) + (eqPillars - 10) + (eqNetwork - 40) + (eqRing - 120)}
+                                 </span>
+                              </div>
+                           </div>
+                        </div>
+
+                        {/* Dynamics reactive instructions */}
+                        <div id="eq-status-indicator" className="p-4 rounded-lg bg-black font-sans border border-emerald-500/15">
+                           {isEquilibriumSolved ? (
+                              <div className="space-y-2">
+                                 <p className="text-xs text-amber-300 font-bold uppercase tracking-wider">🟢 ประสบความสำเร็จ: ระบบสมดุลสถิต 40/20 เสถียรร้อยเปอร์เซ็นต์!</p>
+                                 <p className="text-[9px] opacity-75 leading-relaxed text-emerald-400">
+                                    ยินดีด้วย! คุณได้คลี่คลายความเคร้นและประจัดสมดุลค่าเชิงเวกเตอร์ของทั้ง 4 ระดับเป็นศูนย์ตามกฎจักรวาลวิทยากฎสมดุลของ Keiyrtiphumi ระบบดำเนินการเปิดใช้อัตราตัวคูณโบนัสขุดพิเศษสำเร็จ!
+                                 </p>
+                              </div>
+                           ) : (
+                              <div className="space-y-2">
+                                 <p className="text-xs text-rose-400 font-bold uppercase tracking-wider">⚠️ คำอธิบายสภาพการบิดเบี้ยวเวกเตอร์:</p>
+                                 <p className="text-[10px] opacity-80 leading-relaxed text-neutral-300">
+                                    {((eqCore - 0) + (eqPillars - 10) + (eqNetwork - 40) + (eqRing - 120) > 0) ? (
+                                       <span><strong>แรงลัพธ์มีค่าเป็นบวก (Hyper-Expansion Boost):</strong> พลังงานสะสมส่วนตัวเกินปั๊มความกดอากาศและแรงส่งตึงเครียดมากเกินความเป็นสมดุลตามธรรมชาติ กรุณาเลื่อนแผงตระกูลสวิงลงมาด้านล่างเพื่อผ่อนคลายความขุ่นเคือง</span>
+                                    ) : (
+                                       <span><strong>แรงลัพธ์มีค่าเป็นลบ (Nodal Contraction Void):</strong> สภาพคอกที่อับเฉาขาดแคลนแรงแกนพาดประคองเสถียร ระบบสูญเสียสมดุลภายในแบบบ่วงสูญญากาศและลดประสิทธิภาพการทำงาน กรุณาเลื่อนตัวเพิ่มเพื่อชาร์จไฟหรือขยายขอบบ่วงวงโคจร</span>
+                                    )}
+                                 </p>
+                              </div>
+                           )}
+                        </div>
+                     </div>
+
+                     {/* Extra mining multiplier panel */}
+                     <div className="p-6 border border-emerald-500/10 bg-black/40 rounded-xl space-y-4">
+                        <div className="flex justify-between items-center">
+                           <span className="text-[10px] uppercase font-bold opacity-45">สิทธิประโยชน์พิเศษสภาพสมดุล</span>
+                           <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${isEquilibriumSolved ? 'bg-amber-500 text-black' : 'bg-neutral-800 text-white/40'}`}>
+                              {isEquilibriumSolved ? 'ACTIVE BOOST' : 'STANDBY'}
+                           </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                           <div className={`p-3 rounded-lg ${isEquilibriumSolved ? 'bg-amber-500/10 text-amber-400 animate-bounce' : 'bg-neutral-900 text-neutral-500'}`}>
+                              <TrendingUp className="w-5 h-5" />
+                           </div>
+                           <div>
+                              <p className="text-xs font-bold uppercase text-white">40/20 Equilibrium Mining Multiplier</p>
+                              <p className="text-[9px] opacity-50 uppercase mt-0.5">
+                                 {isEquilibriumSolved ? 'ตัวคูณอัตรารางวัลขุดเพิ่มความเร็ว x1.4020 (กำลังทวีประสิทธิภาพ)' : 'ต้องการผลรวมเวกเตอร์ศูนย์ในการเริ่มใช้งานโบนัส'}
+                              </p>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            </div>
           ) : (
             <div className="p-8 space-y-8 flex-1 overflow-auto">
                <div className="flex items-center gap-4 mb-4">
@@ -2594,9 +3201,9 @@ export default function App() {
                        <h4 className="text-xs font-bold uppercase tracking-widest opacity-60 mb-6">Unauthorized Access Attempts</h4>
                        <div className="flex items-end gap-1 h-24">
                           {Array.from({ length: 40 }).map((_, i) => (
-                            <div key={i} className="flex-1 bg-emerald-500/20 group hover:bg-emerald-500/40 cursor-help relative" style={{ height: `${Math.random() * 100}%` }}>
+                            <div key={i} className="flex-1 bg-emerald-500/20 group hover:bg-emerald-500/40 cursor-help relative" style={{ height: `${((i * 17) % 75) + 15}%` }}>
                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black border border-emerald-500/30 px-2 py-0.5 text-[8px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                 {Math.floor(Math.random() * 20)} Attempts
+                                 {((i * 13) % 15) + 1} Attempts
                                </div>
                             </div>
                           ))}
@@ -2794,7 +3401,23 @@ export default function App() {
             <span>Exchange Reg: {isRegistered ? 'VERIFIED' : 'UNREGISTERED'}</span>
           </div>
           <span className="hidden sm:inline">User: {selectedAsset?.owner || 'AUTHENTICATED_GUEST'}</span>
-           <span className="text-emerald-500/60 transition-all hover:text-emerald-400 cursor-help underline underline-offset-4 decoration-emerald-500/20">Protocol Docs</span>
+          <a 
+            href="/privacy.html" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="text-emerald-500/60 hover:text-emerald-400 transition-all underline underline-offset-4 decoration-emerald-500/20"
+          >
+            Privacy Policy
+          </a>
+          <a 
+            href="/terms.html" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="text-emerald-500/60 hover:text-emerald-400 transition-all underline underline-offset-4 decoration-emerald-500/20"
+          >
+            Terms of Service
+          </a>
+          <span className="text-emerald-500/60 transition-all hover:text-emerald-400 cursor-help underline underline-offset-4 decoration-emerald-500/20">Protocol Docs</span>
         </div>
       </footer>
       <AnimatePresence>
@@ -2827,7 +3450,7 @@ export default function App() {
                   <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded text-left">
                     <span className="text-[9px] uppercase font-bold opacity-30">Identity Hash (Computed)</span>
                     <p className="text-[10px] font-mono text-emerald-500/60 truncate mt-1">
-                      0x{Math.random().toString(16).substring(2, 34).toUpperCase()}
+                      0x{((user?.email || anonymousId) + "_identity_hash_node_safe").split('').reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0).toString(16).padEnd(32, 'a').substring(0, 32).toUpperCase()}
                     </p>
                   </div>
                   <button 
