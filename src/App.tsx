@@ -30,7 +30,11 @@ import {
   Landmark,
   BarChart as BarChartIcon,
   HardDrive,
-  FileText
+  FileText,
+  Users,
+  Globe,
+  MapPin,
+  Eye
 } from 'lucide-react';
 import { initAuth, googleSignIn, logout } from './lib/auth';
 import { User as FirebaseUser } from 'firebase/auth';
@@ -90,6 +94,46 @@ export default function App() {
   const [isMining, setIsMining] = useState(false);
   const [miningYield, setMiningYield] = useState(0);
   const [nodeUpgradeCost, setNodeUpgradeCost] = useState(0.5); // Initial cost in MTX
+  
+  // Visitor Analyzer & Real-time Traffic State
+  const [totalViews, setTotalViews] = useState<number>(() => {
+    const saved = localStorage.getItem('matrix_total_views');
+    const base = saved ? parseInt(saved, 10) : Math.floor(Math.random() * 210) + 1890;
+    const incremented = base + 1;
+    localStorage.setItem('matrix_total_views', incremented.toString());
+    return incremented;
+  });
+
+  const [uniqueVisitors, setUniqueVisitors] = useState<number>(() => {
+    const saved = localStorage.getItem('matrix_unique_users');
+    const base = saved ? parseInt(saved, 10) : Math.floor(Math.random() * 45) + 360;
+    const isNew = !saved || Math.random() > 0.85;
+    const finalVal = isNew ? base + 1 : base;
+    localStorage.setItem('matrix_unique_users', finalVal.toString());
+    return finalVal;
+  });
+
+  const [activeTrafficCount, setActiveTrafficCount] = useState<number>(() => Math.floor(Math.random() * 8) + 15);
+  
+  const [visitorSessions, setVisitorSessions] = useState<Array<{
+    id: string;
+    ip: string;
+    location: string;
+    activeView: string;
+    device: string;
+    latency: number;
+    status: 'ACTIVE' | 'IDLE' | 'ACTION';
+    timestamp: string;
+  }>>([
+    { id: 'node_0x8f2a', ip: '182.52.203.11', location: 'Bangkok, TH', activeView: 'Asset Log', device: 'Desktop (macOS)', latency: 45, status: 'ACTIVE', timestamp: 'Just now' },
+    { id: 'node_0xac31', ip: '223.24.18.99', location: 'Chiang Mai, TH', activeView: 'Node Manager', device: 'Mobile (iOS)', latency: 82, status: 'ACTION', timestamp: '1m ago' },
+    { id: 'node_0x992b', ip: '46.12.215.143', location: 'Frankfurt, DE', activeView: 'Registry Core', device: 'Desktop (Linux)', latency: 180, status: 'IDLE', timestamp: '3m ago' },
+    { id: 'node_0x1102', ip: '110.164.252.1', location: 'Chonburi, TH', activeView: 'Matrix Bank', device: 'Desktop (Windows)', latency: 50, status: 'ACTIVE', timestamp: '4m ago' },
+    { id: 'node_0x7b5e', ip: '128.8.21.43', location: 'California, US', activeView: 'Treasury', device: 'Desktop (macOS)', latency: 195, status: 'IDLE', timestamp: '5m ago' },
+    { id: 'node_0xf9e2', ip: '54.254.12.80', location: 'Singapore, SG', activeView: 'Matrix Drive', device: 'Server Node', latency: 28, status: 'ACTIVE', timestamp: '7m ago' },
+    { id: 'node_0xee8e', ip: '210.1.201.55', location: 'Tokyo, JP', activeView: 'Network Pulse', device: 'Mobile (Android)', latency: 98, status: 'ACTION', timestamp: '8m ago' },
+    { id: 'node_0xd41c', ip: '124.122.95.141', location: 'Khon Kaen, TH', activeView: 'Marketplace', device: 'Mobile (iOS)', latency: 68, status: 'ACTIVE', timestamp: '12m ago' }
+  ]);
   
   const stakeholders = useMemo(() => [
     { id: 'mof', name: 'Ministry of Finance (TH)', shares: 42.0, role: 'REGULATORY', status: 'VERIFIED' },
@@ -196,6 +240,61 @@ export default function App() {
       return () => clearInterval(interval);
     }
   }, [isMining, miningPower, activeMiningNodes]);
+
+  // Real-time Visitor Dynamic Simulator Effect
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // 1. Randomly update active traffic count slightly (maintain boundaries between 14 and 35)
+      setActiveTrafficCount(prev => {
+        const delta = Math.random() > 0.5 ? 1 : -1;
+        const newCount = prev + delta;
+        return newCount < 12 ? 12 : newCount > 35 ? 35 : newCount;
+      });
+
+      // 2. 30% chance to increment totalViews slightly to represent live page views
+      if (Math.random() > 0.7) {
+        setTotalViews(prev => {
+          const newViews = prev + 1;
+          localStorage.setItem('matrix_total_views', newViews.toString());
+          return newViews;
+        });
+      }
+
+      // 3. Randomly update one of the concurrent simulated visitor sessions
+      setVisitorSessions(prev => {
+        return prev.map((session, idx) => {
+          // Choose one session to change randomly each tick
+          const shouldChange = Math.floor(Math.random() * prev.length) === idx;
+          if (shouldChange) {
+            const statuses: Array<'ACTIVE' | 'IDLE' | 'ACTION'> = ['ACTIVE', 'IDLE', 'ACTION'];
+            const views = [
+              'Asset Log', 'Node Manager', 'Marketplace', 'Treasury', 
+              'Matrix Bank', 'Matrix Drive', 'Network Pulse', 'Security Core'
+            ];
+            const nextStatus = statuses[Math.floor(Math.random() * statuses.length)];
+            const nextView = views[Math.floor(Math.random() * views.length)];
+            const nextLatency = Math.max(15, Math.min(250, session.latency + Math.floor(Math.random() * 21) - 10));
+            
+            return {
+              ...session,
+              status: nextStatus,
+              activeView: nextView,
+              latency: nextLatency,
+              timestamp: 'Just now'
+            };
+          } else {
+            // Update other timestamps dynamically
+            return {
+              ...session,
+              timestamp: session.timestamp === 'Just now' ? '1m ago' : session.timestamp
+            };
+          }
+        });
+      });
+    }, 4000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   const handleStartMining = () => {
     if (activeMiningNodes === 0 && walletBalance >= nodeUpgradeCost) {
@@ -551,16 +650,16 @@ export default function App() {
         <aside className="w-16 md:w-64 border-r border-emerald-500/10 bg-black/40 flex flex-col">
           <div className="p-4 md:p-6 space-y-6 flex-1">
             <div className="space-y-4">
-              <span className="hidden md:block text-[10px] uppercase font-bold opacity-30 tracking-widest mb-2">Systems</span>
+              <span className="hidden md:block text-[10px] uppercase font-bold opacity-30 tracking-widest mb-2">ระบบควบคุม</span>
               {[
-                { id: 'LOG' as const, icon: Database, label: 'Asset Log' },
-                { id: 'MANAGER' as const, icon: Cpu, label: 'Node Manager' },
-                { id: 'MARKET' as const, icon: ShoppingCart, label: 'Marketplace' },
-                { id: 'TREASURY' as const, icon: ShieldCheck, label: 'Treasury' },
-                { id: 'BANK' as const, icon: Landmark, label: 'Matrix Bank' },
-                { id: 'DRIVE' as const, icon: HardDrive, label: 'Matrix Drive' },
-                { id: 'PULSE' as const, icon: Activity, label: 'Network Pulse' },
-                { id: 'SECURITY' as const, icon: Lock, label: 'Security Core' },
+                { id: 'LOG' as const, icon: Database, label: 'บันทึกทรัพย์สิน (Asset Log)' },
+                { id: 'MANAGER' as const, icon: Cpu, label: 'ผู้จัดการโหนด (Node Manager)' },
+                { id: 'MARKET' as const, icon: ShoppingCart, label: 'ตลาดซื้อขาย (Marketplace)' },
+                { id: 'TREASURY' as const, icon: ShieldCheck, label: 'คลังส่วนกลาง (Treasury)' },
+                { id: 'BANK' as const, icon: Landmark, label: 'ธนาคารเมทริกซ์ (Matrix Bank)' },
+                { id: 'DRIVE' as const, icon: HardDrive, label: 'ไดรฟ์ข้อมูล (Matrix Drive)' },
+                { id: 'PULSE' as const, icon: Activity, label: 'วิเคราะห์ทราฟฟิก (Network Pulse)' },
+                { id: 'SECURITY' as const, icon: Lock, label: 'แกนความปลอดภัย (Security)' },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -576,11 +675,11 @@ export default function App() {
             </div>
 
             <div className="hidden md:block pt-6 border-t border-emerald-500/10">
-              <span className="text-[10px] uppercase font-bold opacity-30 tracking-widest block mb-4">Diagnostics</span>
+              <span className="text-[10px] uppercase font-bold opacity-30 tracking-widest block mb-4">ระบบวินิจฉัยและสถิติ</span>
               <div className="space-y-4">
                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between text-[9px] opacity-60">
-                    <span>Core Load</span>
+                    <span>ภาระงานเซิร์ฟเวอร์ (Core Load)</span>
                     <span>42%</span>
                   </div>
                   <div className="h-0.5 w-full bg-emerald-950">
@@ -589,7 +688,7 @@ export default function App() {
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between text-[9px] opacity-60">
-                    <span>Memory Synch</span>
+                    <span>การซิงก์หน่วยความจำ (Memory Sync)</span>
                     <span>88%</span>
                   </div>
                   <div className="h-0.5 w-full bg-emerald-950">
@@ -599,7 +698,7 @@ export default function App() {
 
                 <div className="flex flex-col gap-1.5 pt-2">
                   <div className="flex justify-between text-[9px] opacity-60">
-                    <span className="text-amber-500/60 font-black">Regulatory Sync (MOF)</span>
+                    <span className="text-amber-500/60 font-black">ซิงค์กระทรวงการคลัง (MOF)</span>
                     <span className="text-amber-500/60">98.4%</span>
                   </div>
                   <div className="h-0.5 w-full bg-amber-950/20">
@@ -609,7 +708,7 @@ export default function App() {
 
                 <div className="flex flex-col gap-1.5 pt-2">
                    <div className="flex justify-between text-[9px] opacity-60">
-                     <span className="text-blue-500/60 font-black">AIS Cloud (TH-BANGKOK-1)</span>
+                     <span className="text-blue-500/60 font-black">เอไอเอส คลาวด์ (AIS-BANGKOK-1)</span>
                      <span className="text-blue-500/80 font-mono">ENCRYPTED</span>
                    </div>
                    <div className="h-0.5 w-full bg-blue-950/20 flex gap-0.5">
@@ -618,7 +717,7 @@ export default function App() {
                      <div className="h-full bg-blue-500/60 w-1/4 shadow-[0_0_8px_#3b82f6]" />
                      <div className="h-full bg-blue-500/60 w-1/4 animate-pulse shadow-[0_0_12px_#3b82f6]" />
                    </div>
-                   <p className="text-[7px] text-blue-500/40 uppercase font-bold mt-1">Provider: AIS Business Cloud v4.2</p>
+                   <p className="text-[7px] text-blue-500/40 uppercase font-bold mt-1">ผู้ให้บริการ: AIS Business Cloud v4.2</p>
                 </div>
 
                 <div className="pt-4 border-t border-emerald-500/10">
@@ -632,9 +731,9 @@ export default function App() {
                    >
                      <div className="flex items-center gap-2">
                         <Zap className={`w-3 h-3 ${isMonetized ? 'animate-pulse text-cyan-400' : ''}`} />
-                        <span className="text-[9px] font-black uppercase tracking-widest">Protocol Ads</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest">โฆษณาเครือข่าย (Ads)</span>
                      </div>
-                     <span className="text-[8px] font-mono leading-none">{isMonetized ? 'ACTIVE' : 'IDLE'}</span>
+                     <span className="text-[8px] font-mono leading-none">{isMonetized ? 'กำลังทำงาน' : 'ปิด'}</span>
                    </button>
                 </div>
               </div>
@@ -2211,66 +2310,241 @@ export default function App() {
                                  <td className="px-6 py-4">
                                    <span className="text-[9px] font-mono text-blue-500/60 truncate max-w-[150px] inline-block">{file.mimeType}</span>
                                  </td>
-                                 <td className="px-6 py-4">
-                                   <span className="text-[9px] font-bold opacity-30 uppercase">{new Date(file.modifiedTime).toLocaleDateString()}</span>
-                                 </td>
-                                 <td className="px-6 py-4 text-right">
-                                   <a 
-                                    href={file.webViewLink} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    className="p-2 text-blue-500/40 hover:text-blue-400 hover:bg-blue-500/10 rounded-full transition-all inline-block"
-                                   >
-                                     <ExternalLink className="w-4 h-4" />
-                                   </a>
-                                 </td>
-                               </tr>
-                             ))}
-                           </tbody>
-                         </table>
-                       ) : (
-                         <div className="py-20 flex flex-col items-center justify-center gap-4 text-blue-500/40">
-                            <Info className="w-12 h-12 opacity-20" />
-                            <p className="text-[10px] font-black uppercase tracking-widest text-center">
-                              Buffer empty. No protocol files detected in root directory.<br/>
-                              <span className="opacity-50 mt-1 inline-block">MIME: application/vnd.google-apps.*</span>
-                            </p>
-                         </div>
-                       )}
-                    </div>
+                                  <td className="px-6 py-4">
+                                    <span className="text-[9px] font-bold opacity-30 uppercase">{new Date(file.modifiedTime).toLocaleDateString()}</span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    <a 
+                                     href={file.webViewLink} 
+                                     target="_blank" 
+                                     rel="noopener noreferrer" 
+                                     className="p-2 text-blue-500/40 hover:text-blue-400 hover:bg-blue-500/10 rounded-full transition-all inline-block"
+                                    >
+                                      <ExternalLink className="w-4 h-4" />
+                                    </a>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <div className="py-20 flex flex-col items-center justify-center gap-4 text-blue-500/40">
+                             <Info className="w-12 h-12 opacity-20" />
+                             <p className="text-[10px] font-black uppercase tracking-widest text-center">
+                               Buffer empty. No protocol files detected in root directory.<br/>
+                               <span className="opacity-50 mt-1 inline-block">MIME: application/vnd.google-apps.*</span>
+                             </p>
+                          </div>
+                        )}
+                     </div>
+                   </div>
+                 </div>
+               )}
+             </div>
+           ) : currentView === 'PULSE' ? (
+             <div className="p-8 space-y-8 overflow-auto flex-1 bg-gradient-to-br from-indigo-950/10 to-transparent">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded shadow-[0_0_15px_rgba(99,102,241,0.1)]">
+                    <Activity className="w-6 h-6 text-indigo-400 animate-pulse" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold uppercase tracking-widest text-indigo-300">ระบบวิเคราะห์ทราฟฟิกโหนด (Nodal Traffic Analyzer)</h2>
+                    <p className="text-[10px] opacity-40 uppercase">ระบบความเคลื่อนไหวผู้เข้าชมเว็บ & การตรวจสอบการเชื่อมต่อขาเข้าแบบเรียลไทม์</p>
                   </div>
                 </div>
-              )}
-            </div>
-          ) : currentView === 'PULSE' ? (
-            <div className="p-8 flex-1 flex flex-col overflow-hidden">
-                <div className="flex items-center gap-4 mb-8">
-                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded">
-                   <Activity className="w-6 h-6" />
-                 </div>
-                 <div>
-                   <h2 className="text-xl font-bold uppercase tracking-widest">Network Pulse</h2>
-                   <p className="text-[10px] opacity-40 uppercase">Real-time Stream of Matrix Interactions</p>
-                 </div>
-               </div>
+                <div>
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] text-emerald-400 font-bold uppercase tracking-wider animate-pulse">
+                     <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+                     สัญญาณทราฟฟิกเสถียร (SIGNAL OK)
+                  </span>
+                </div>
+              </div>
 
-               <div className="flex-1 overflow-auto border border-emerald-500/20 bg-black/60 rounded-lg p-6 font-mono text-[11px] space-y-1 scrollbar-hide">
-                  {Array.from({ length: 15 }).map((_, i) => (
-                    <motion.div 
-                      key={i}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1 - (i * 0.05), x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      className="flex gap-4 py-1 border-b border-emerald-500/5"
-                    >
-                      <span className="text-emerald-500/20">[{new Date(Date.now() - i * 14000).toLocaleTimeString()}]</span>
-                      <span className="text-cyan-500/60 font-bold uppercase">CMD_EXEC</span>
-                      <span className="text-emerald-500/70">Node Protocol Sync {Math.random().toString(16).substring(2, 10).toUpperCase()} {'->'} Success</span>
-                      <span className="ml-auto text-emerald-500/20">#0x{Math.floor(Math.random() * 99999)}</span>
-                    </motion.div>
-                  ))}
-                  <div className="pt-2 animate-pulse text-emerald-400">_ STREAMS_LISTENING_...</div>
-               </div>
+              {/* Grid Metrics */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                 <div className="p-5 bg-indigo-500/5 border border-indigo-500/10 rounded-xl relative overflow-hidden group shadow-[0_0_15px_rgba(99,102,241,0.02)]">
+                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                       <Eye className="w-8 h-8 text-indigo-400" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-400/70">การเข้าชมทั้งหมด (Hits)</span>
+                    <p className="text-2xl font-black text-white mt-1">{totalViews.toLocaleString()}</p>
+                    <p className="text-[8px] opacity-40 uppercase tracking-tighter mt-1">ยอดรวมคำร้องขอสิทธิ์เชื่อมต่อเว็บบอร์ด</p>
+                 </div>
+
+                 <div className="p-5 bg-indigo-500/5 border border-indigo-500/10 rounded-xl relative overflow-hidden group shadow-[0_0_15px_rgba(99,102,241,0.02)]">
+                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                       <Users className="w-8 h-8 text-blue-400" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-blue-400/70">ยอดผู้เข้าชมที่ไม่ซ้ำ (Unique)</span>
+                    <p className="text-2xl font-black text-white mt-1">{uniqueVisitors.toLocaleString()}</p>
+                    <p className="text-[8px] opacity-40 uppercase tracking-tighter mt-1">จำนวนคีย์ตรวจสอบโหนดคอมพิวเตอร์ที่ลงทะเบียน</p>
+                 </div>
+
+                 <div className="p-5 bg-indigo-500/5 border border-indigo-500/10 rounded-xl relative overflow-hidden group shadow-[0_0_15px_rgba(99,102,241,0.02)]">
+                    <div className="absolute top-1.5 right-1.5">
+                       <span className="flex h-2 w-2 relative">
+                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                       </span>
+                    </div>
+                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                       <Activity className="w-8 h-8 text-emerald-400" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-400/70">โหนดออนไลน์ปัจจุบัน</span>
+                    <p className="text-2xl font-black text-emerald-300 mt-1">{activeTrafficCount}</p>
+                    <p className="text-[8px] opacity-40 uppercase tracking-tighter mt-1">ช่องสัญญาณเครือข่ายสตรีมมิ่งที่กำลังเชื่อมต่อสด</p>
+                 </div>
+
+                 <div className="p-5 bg-indigo-500/5 border border-indigo-500/10 rounded-xl relative overflow-hidden group shadow-[0_0_15px_rgba(99,102,241,0.02)]">
+                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                       <Globe className="w-8 h-8 text-purple-400" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-purple-400/70">IP ประจำโหนดของคุณ</span>
+                    <p className="text-xl font-black text-white mt-1.5 truncate">124.120.48.92</p>
+                    <p className="text-[8px] opacity-40 uppercase tracking-tighter mt-1">ตำแหน่ง: กรุงเทพมหานคร, ไทย (โหนดส่วนกลาง)</p>
+                 </div>
+              </div>
+
+              {/* Main Content Sections */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Visual Active Visitors Map & List */}
+                <div className="col-span-1 lg:col-span-2 border border-indigo-500/10 rounded-xl overflow-hidden bg-black/40 shadow-[0_0_25px_rgba(0,0,0,0.3)]">
+                  <div className="px-6 py-4 border-b border-indigo-500/10 flex items-center justify-between bg-indigo-950/10">
+                     <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-indigo-400" />
+                        <h3 className="text-xs font-black uppercase tracking-widest text-indigo-300">ทะเบียนสถิติโหนดที่กำลังสื่อสารทั่วโลก</h3>
+                     </div>
+                     <span className="text-[9px] font-mono text-indigo-500/60 uppercase">สถานะภาพรวม API: กำลังทำงาน</span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-indigo-500/5 border-b border-indigo-500/10">
+                          <th className="px-5 py-3.5 text-[10px] uppercase tracking-wider opacity-40 font-bold text-indigo-300">รหัสยืนยันโหนด (Identifier)</th>
+                          <th className="px-5 py-3.5 text-[10px] uppercase tracking-wider opacity-40 font-bold text-indigo-300">ที่ตั้งทางภูมิศาสตร์</th>
+                          <th className="px-5 py-3.5 text-[10px] uppercase tracking-wider opacity-40 font-bold text-indigo-300">โมดูลที่เข้าใช้</th>
+                          <th className="px-5 py-3.5 text-[10px] uppercase tracking-wider opacity-40 font-bold text-indigo-300">ความหน่วงเครือข่าย</th>
+                          <th className="px-5 py-3.5 text-[10px] uppercase tracking-wider opacity-40 font-bold text-indigo-300 text-right">สถานะกิจกรรม</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-indigo-500/5">
+                        {/* Always prepend user session as the active director node */}
+                        <tr className="bg-emerald-500/5 border-l-2 border-emerald-500 transition-colors">
+                           <td className="px-5 py-3.5">
+                             <div className="flex items-center gap-2.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                <div className="flex flex-col">
+                                   <span className="text-[11px] font-bold text-emerald-300 uppercase">node_director_0x12 (คุณ)</span>
+                                   <span className="text-[8px] font-mono opacity-40">124.120.48.92</span>
+                                </div>
+                             </div>
+                           </td>
+                           <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-1.5">
+                                 <MapPin className="w-3 h-3 text-emerald-400/80" />
+                                 <span className="text-[10px] font-bold text-emerald-200/90 tracking-wide uppercase">กรุงเทพฯ, ไทย</span>
+                              </div>
+                           </td>
+                           <td className="px-5 py-3.5">
+                              <span className="text-[9px] font-mono text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 uppercase font-bold">
+                                 วิเคราะห์ทราฟฟิก
+                              </span>
+                           </td>
+                           <td className="px-5 py-3.5">
+                              <span className="text-[10px] font-mono font-bold text-emerald-400">12ms (คู่สายส่วนตัว)</span>
+                           </td>
+                           <td className="px-5 py-3.5 text-right">
+                              <span className="inline-block px-1.5 py-0.5 text-[8px] uppercase font-black tracking-widest bg-emerald-500 text-black rounded animate-pulse">
+                                 ผู้สั่งการหลัก
+                              </span>
+                           </td>
+                        </tr>
+
+                        {visitorSessions.map((session) => (
+                          <tr key={session.id} className="hover:bg-indigo-500/5 transition-colors group">
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-2.5">
+                                 <div className="flex flex-col">
+                                    <span className="text-[11px] font-bold text-indigo-100 uppercase group-hover:text-indigo-300 transition-colors">{session.id}</span>
+                                    <span className="text-[8px] font-mono text-indigo-400/40">{session.ip} • {session.device}</span>
+                                 </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5">
+                               <div className="flex items-center gap-1.5">
+                                  <MapPin className="w-3 h-3 text-indigo-400 opacity-60" />
+                                  <span className="text-[10px] opacity-80 uppercase font-medium">{session.location === 'Bangkok, TH' ? 'กรุงเทพฯ, ไทย' : session.location === 'Chiang Mai, TH' ? 'เชียงใหม่, ไทย' : session.location === 'Frankfurt, DE' ? 'แฟรงก์เฟิร์ต, เยอรมนี' : session.location === 'Chonburi, TH' ? 'ชลบุรี, ไทย' : session.location === 'California, US' ? 'แคลิฟอร์เนีย, สหรัฐฯ' : session.location === 'Singapore, SG' ? 'สิงคโปร์' : session.location === 'Tokyo, JP' ? 'โตเกียว, ญี่ปุ่น' : 'ขอนแก่น, ไทย'}</span>
+                               </div>
+                            </td>
+                            <td className="px-5 py-3.5">
+                               <span className="text-[9px] font-mono opacity-70 uppercase tracking-tighter font-semibold">
+                                 {session.activeView === 'Asset Log' ? 'บันทึกสินทรัพย์' : session.activeView === 'Node Manager' ? 'ตัวจัดการโหนด' : session.activeView === 'Marketplace' ? 'ตลาดซื้อขาย' : session.activeView === 'Treasury' ? 'คลังส่วนกลาง' : session.activeView === 'Matrix Bank' ? 'ธนาคารเมทริกซ์' : session.activeView === 'Matrix Drive' ? 'ไดรฟ์เก็บข้อมูล' : session.activeView === 'Network Pulse' ? 'ชีพจรเครือข่าย' : 'แกนความปลอดภัย'}
+                               </span>
+                            </td>
+                            <td className="px-5 py-3.5">
+                               <span className={`text-[10px] font-mono ${
+                                  session.latency < 60 ? 'text-emerald-400' : session.latency < 110 ? 'text-cyan-400' : 'text-amber-400/80'
+                               }`}>{session.latency}ms</span>
+                            </td>
+                            <td className="px-5 py-3.5 text-right">
+                               <span className={`inline-block px-2 py-0.5 rounded text-[8px] uppercase font-black tracking-widest ${
+                                 session.status === 'ACTIVE' 
+                                   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                   : session.status === 'ACTION'
+                                     ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse'
+                                     : 'bg-white/5 text-white/30'
+                               }`}>
+                                 {session.status === 'ACTIVE' ? 'เชื่อมต่อแล้ว' : session.status === 'ACTION' ? 'ทำกิจกรรม' : 'สแตนด์บาย'}
+                               </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  <div className="px-6 py-4 bg-indigo-500/5 border-t border-indigo-500/10 text-[9px] font-bold uppercase text-indigo-400/60 leading-relaxed font-sans">
+                     * ระบบตรวจสอบความเคลื่อนไหวระบุตำแหน่งและสิทธิ์ผ่าน Matrix Nodal Protocol - แสดงผลการเข้าชมและขุดแบบเรียลไทม์
+                  </div>
+                </div>
+
+                {/* Live Activity Logs Console Block */}
+                <div className="col-span-1 border border-indigo-500/10 rounded-xl overflow-hidden bg-black/60 flex flex-col h-[520px] shadow-[0_0_25px_rgba(0,0,0,0.3)]">
+                  <div className="px-6 py-4 border-b border-indigo-500/10 flex items-center justify-between bg-indigo-950/10">
+                     <div className="flex items-center gap-2">
+                        <Terminal className="w-4 h-4 text-indigo-400" />
+                        <h3 className="text-xs font-black uppercase tracking-widest text-indigo-300">บันทึกกิจกรรมทราฟฟิก (Live Logs)</h3>
+                     </div>
+                     <span className="text-[8px] animate-pulse text-indigo-400 font-bold uppercase tracking-wider">เชื่อมต่อสตรีม</span>
+                  </div>
+
+                  <div className="p-4 flex-1 overflow-auto font-mono text-[10px] space-y-2.5 scrollbar-hide">
+                     <div className="text-emerald-400/50 flex gap-2">
+                        <span>[{new Date().toLocaleTimeString()}]</span>
+                        <span className="font-bold">STATUS_INIT</span>
+                        <span>ยืนยันผู้ใช้งานโหนดส่วนกลางและเปิดทำงานจากจังหวัด กรุงเทพมหานคร (คู่สาย 124.120.48.92)...</span>
+                     </div>
+                     
+                     {visitorSessions.map((session, i) => (
+                       <div key={i} className="text-indigo-300/80 flex gap-2 leading-relaxed text-[10px]">
+                          <span className="text-indigo-500/40">[{new Date(Date.now() - i * 11000).toLocaleTimeString()}]</span>
+                          <span className={`${session.status === 'ACTION' ? 'text-cyan-400' : 'text-indigo-400'} font-bold`}>
+                             {session.status === 'ACTION' ? 'ดำเนินการ_คำขอ' : 'สัญญาณ_เชื่อมต่อ'}
+                          </span>
+                          <span className="whitespace-pre-wrap">
+                             โหนด {session.id} ({session.location === 'Bangkok, TH' ? 'กรุงเทพฯ, ไทย' : session.location === 'Chiang Mai, TH' ? 'เชียงใหม่, ไทย' : session.location === 'Frankfurt, DE' ? 'แฟรงก์เฟิร์ต, เยอรมนี' : session.location === 'Chonburi, TH' ? 'ชลบุรี, ไทย' : session.location === 'California, US' ? 'แคลิฟอร์เนีย, สหรัฐฯ' : session.location === 'Singapore, SG' ? 'สิงคโปร์' : session.location === 'Tokyo, JP' ? 'โตเกียว, ญี่ปุ่น' : 'ขอนแก่น, ไทย'}) {session.status === 'ACTION' ? 'ทำการเรียกอัปเดตโมดูล' : 'ยิงวิเคราะห์ความหน่วงเครือข่ายไปยัง'} /{session.activeView.toLowerCase().replace(' ', '_')}
+                          </span>
+                       </div>
+                     ))}
+                     
+                     <div className="pt-2 animate-pulse text-indigo-500 font-bold">_ กำลังเฝ้าฟังการสตรีมคำสั่งและสัญญาณพิงอย่างต่อเนื่อง_...</div>
+                  </div>
+                </div>
+                
+              </div>
             </div>
           ) : (
             <div className="p-8 space-y-8 flex-1 overflow-auto">
