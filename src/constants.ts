@@ -75,7 +75,7 @@ const TRUTH_ASSET: CryptoAsset = {
   name: "Seed of Singularity #1",
   type: "CORE",
   status: "ACTIVE",
-  owner: "เกียรติภูมิ ศรีนารัตน์",
+  owner: "เกียรติภูมิ ศรนารัตน์",
   hash: "0x85D042DD5FF90FE29A693FC1D114EBAEE3F196C8552F4B76025BF677457D037C",
   lastVerified: "2026-04-07",
   purity: 51.30676342024219,

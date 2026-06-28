@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -422,6 +423,59 @@ app.post("/api/withdraw", (req, res) => {
       ? `Real Withdrawal registered. Our payment administrator is processing this to your selected ${bank} account.`
       : `Sandbox Withdrawal processed immediately! Your simulated THB bank balance has been adjusted.`,
   });
+});
+
+// Redeem R&D Funding Grant
+app.post("/api/apply-grant", (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ error: "ข้อมูลประจำตัวหรือรหัสผ่านประเมินทุนขาดหาย" });
+  }
+
+  const sanitizedCode = code.trim().toLowerCase();
+  if (sanitizedCode !== "a4dff9660c4b54da8") {
+    return res.status(400).json({ error: "รหัสจัดสรรทุนวิจัยไม่ถูกต้องหรือไม่ได้รับการระบุในสารบบ AIS" });
+  }
+
+  try {
+    const transactions = JSON.parse(fs.readFileSync(TRANSACTIONS_FILE, "utf8")) as Transaction[];
+    const alreadyRedeemed = transactions.some(
+      (t) => t.email === email && t.id === "A4DFF9660C4B54DA8"
+    );
+    if (alreadyRedeemed) {
+      return res.status(400).json({ error: "สิทธิ์การใช้รหัสทุนวิจัยและพัฒนานี้ถูกอนุมัติข้ามสายโหนดไปเรียบร้อยแล้ว" });
+    }
+
+    const currentStats = getUserStats(email);
+    const grantMTX = 5000.0;
+    const grantTHB = grantMTX * 175.50; // MTX_TO_THB rate is 175.50
+
+    const nextWalletBal = currentStats.walletBalance + grantMTX;
+    updateUserStats(email, { walletBalance: nextWalletBal });
+
+    const newTx: Transaction = {
+      id: "A4DFF9660C4B54DA8",
+      email,
+      type: "DEPOSIT",
+      amount: grantTHB,
+      currency: "THB",
+      status: "COMPLETED",
+      isReal: true,
+      timestamp: new Date().toISOString(),
+    };
+    transactions.unshift(newTx);
+    fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2), "utf8");
+
+    res.json({
+      success: true,
+      walletBalance: nextWalletBal,
+      tx: newTx,
+      message: `อนุมัติเสร็จสิ้น! คุณได้รับ 'เงินทุนวิจัยและพัฒนา' จากระบบจัดสรร AIS จำนวน +5,000.00 MTX (≈ ${grantTHB.toLocaleString(undefined, { maximumFractionDigits: 2 })} บาท) เข้าสู่กระเป๋าโหนดเรียบร้อยแล้ว`,
+    });
+  } catch (error: any) {
+    console.error("Error processing R&D Grant:", error);
+    res.status(500).json({ error: "ระบบประมวลผลเครือข่ายขัดข้อง กรุณาลองใหม่อีกครั้ง" });
+  }
 });
 
 // Create Stripe Checkout Session (deposit / buying MTX tokens with real money)
